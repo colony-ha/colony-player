@@ -7,6 +7,12 @@ on:
       - "android-tv/**"
       - "functions/api/device/register.js"
       - "functions/api/playlists/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android-tv/**"
+      - "functions/api/device/register.js"
+      - "functions/api/playlists/**"
   workflow_dispatch:
 
 permissions:
