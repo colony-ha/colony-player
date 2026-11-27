@@ -1,6 +1,6 @@
 package com.colony.player
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -39,7 +39,7 @@ private const val MUTED = 0xFFAAA39A.toInt()
 
 data class MediaEntry(val title: String, val url: String, val group: String, val logo: String, val type: String)
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     private val http = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
     private lateinit var deviceId: String
     private lateinit var deviceKey: String
