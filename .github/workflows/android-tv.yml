@@ -2,7 +2,7 @@ name: Build COLONY PLAYER Android TV
 
 on:
   push:
-    branches: [android-tv]
+    branches: [android-tv, android-tv-rebuild]
     paths:
       - "android-tv/**"
       - ".github/workflows/android-tv.yml"
