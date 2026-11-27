@@ -1,0 +1,45 @@
+import { json, randomHex, sha256, entitlement } from "../../_shared/auth.js";
+
+export async function onRequestPost({ request, env }) {
+  try {
+    const body = await request.json();
+    const deviceId = String(body.deviceId || "").trim().toUpperCase().replace(/\\s+/g, "");
+    const deviceKey = String(body.deviceKey || "").trim();
+    if (deviceId.length < 6 || deviceId.length > 128 || deviceKey.length < 12 || deviceKey.length > 256) {
+      return json({ ok: false, error: "INVALID_DEVICE_DETAILS" }, 400);
+    }
+    if (!env.DB || !env.DEVICE_KEY_PEPPER) return json({ ok: false, error: "SERVER_NOT_CONFIGURED" }, 503);
+
+    const now = Math.floor(Date.now() / 1000);
+    const keyHash = await sha256(env.DEVICE_KEY_PEPPER + ":" + deviceKey);
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO devices (id, device_id, device_key_hash, created_at, trial_ends_at, status) VALUES (?, ?, ?, ?, ?, 'active')"
+    ).bind(id, deviceId, keyHash, now, now + 7 * 24 * 60 * 60).run();
+
+    const device = await env.DB.prepare(
+      "SELECT id, device_key_hash, status, trial_ends_at, license_ends_at FROM devices WHERE device_id = ? LIMIT 1"
+    ).bind(deviceId).first();
+
+    if (!device || device.device_key_hash !== keyHash || device.status !== "active") {
+      return json({ ok: false, error: "DEVICE_NOT_AUTHORIZED" }, 401);
+    }
+
+    const access = entitlement(device);
+    if (!access.active) return json({ ok: false, error: "SUBSCRIPTION_EXPIRED", entitlement: access }, 403);
+
+    const token = randomHex(32);
+    const tokenHash = await sha256(token);
+    await env.DB.prepare(
+      "INSERT INTO device_sessions (id, device_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(crypto.randomUUID(), device.id, tokenHash, now, now + 30 * 24 * 60 * 60).run();
+
+    return json({
+      ok: true,
+      token,
+      device: { deviceId, entitlement: access }
+    });
+  } catch (error) {
+    return json({ ok: false, error: "LOGIN_FAILED" }, 500);
+  }
+}
