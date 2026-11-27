@@ -1,5 +1,5 @@
 import { json, currentAdmin, audit, makeCode } from "../../_shared/admin.js";
-import { sha256 } from "../../_shared/auth.js";
+import { sha256, encryptText } from "../../_shared/auth.js";
 
 export async function onRequestGet({request,env}) {
   const admin=await currentAdmin(request,env);
@@ -16,11 +16,16 @@ export async function onRequestPost({request,env}) {
   try {
     const body=await request.json(), count=Number(body.count||1);
     if (!Number.isInteger(count)||count<1||count>50) return json({ok:false,error:"INVALID_COUNT"},400);
+    if (!env.PLAYLIST_ENCRYPTION_KEY) return json({ok:false,error:"ENCRYPTION_NOT_CONFIGURED"},503);
     const created=[], statements=[];
     for(let i=0;i<count;i++){
-      const code=makeCode(), id=crypto.randomUUID(), hash=await sha256(code.replace(/[\s-]/g,"").toUpperCase());
+      const code=makeCode(), id=crypto.randomUUID();
+      const normalized=code.replace(/[\s-]/g,"").toUpperCase();
+      const hash=await sha256(normalized);
+      const encrypted=await encryptText(code,env.PLAYLIST_ENCRYPTION_KEY);
       created.push(code);
-      statements.push(env.DB.prepare("INSERT INTO activation_codes (id,code_hash,created_at,status) VALUES (?,?,?,'available')").bind(id,hash,Math.floor(Date.now()/1000)));
+      statements.push(env.DB.prepare("INSERT INTO activation_codes (id,code_hash,code_encrypted,code_iv,created_at,status) VALUES (?,?,?,?,?,'available')")
+        .bind(id,hash,encrypted.encrypted,encrypted.iv,Math.floor(Date.now()/1000)));
     }
     await env.DB.batch(statements);
     await audit(env,admin.id,"codes_generated","activation_codes",null,JSON.stringify({count}));
