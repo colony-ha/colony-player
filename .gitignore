@@ -1,0 +1,7 @@
+# Android build outputs
+android-tv/.gradle/
+android-tv/**/build/
+android-tv/local.properties
+android-tv/upload-keystore.jks
+*.jks
+*.keystore
