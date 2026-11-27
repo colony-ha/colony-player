@@ -53,14 +53,9 @@ class MainActivity : ComponentActivity() {
         deviceId = prefs.getString("device_id", null)?.takeIf { it.matches(Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}")) } ?: randomDeviceId().also { prefs.edit().putString("device_id", it).apply() }
         deviceKey = prefs.getString("device_key", null)?.takeIf { it.matches(Regex("[0-9]{6}")) } ?: randomDeviceKey().also { prefs.edit().putString("device_key", it).apply() }
         favorites.addAll(prefs.getStringSet("favorites", emptySet()) ?: emptySet())
-        showMessage("جاري تهيئة COLONY PLAYER", "يرجى الانتظار…")
-        lifecycleScope.launch {
-            try {
-                val reg = withContext(Dispatchers.IO) { api("POST", "/device/register", JSONObject().put("deviceId", deviceId).put("deviceKey", deviceKey)) }
-                if (!reg.optBoolean("ok")) error(apiError(reg))
-                authenticate()
-            } catch (e: Exception) { showConnectionError(e.message ?: "تعذر الاتصال") }
-        }
+        // Always start on the exact approved activation artwork.
+        // The user presses RELOAD after adding a playlist on the website.
+        showActivationScreen()
     }
 
     private suspend fun authenticate() {
@@ -117,7 +112,10 @@ class MainActivity : ComponentActivity() {
             names.add(item.optString("id") to item.optString("name", "قائمة تشغيل"))
         }
         if (names.isEmpty()) {
-            showEmptyLibrary()
+            playlistId = ""
+            streams = emptyList()
+            showActivationScreen()
+            Toast.makeText(this, "لم نعثر على قائمة تشغيل بعد. أضف قائمتك من الموقع ثم اضغط RELOAD.", Toast.LENGTH_LONG).show()
             return
         }
         if (playlistId.isBlank()) {
@@ -542,119 +540,76 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showActivationScreen(status: String = "DEVICE NOT ACTIVATED") {
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-            setBackgroundColor(0xFF050505.toInt())
-            setPadding(22, 18, 22, 18)
+        val frame = FrameLayout(this)
+        val artwork = ImageView(this).apply {
+            setImageResource(R.drawable.colony_activation_screen)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "COLONY PLAYER device activation"
         }
+        frame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
+        val w = resources.displayMetrics.widthPixels
+        val h = resources.displayMetrics.heightPixels
 
-        val brandPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(18, 20, 18, 20)
-            background = rounded(0xFF0A0A0A.toInt(), 22, GOLD, 2)
-        }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.colony_player_logo)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-            contentDescription = "COLONY PLAYER"
-        }
-        brandPanel.addView(logo, LinearLayout.LayoutParams(-1, 0, 1f))
-        addText(brandPanel, "STREAM  ·  ENJOY  ·  MORE", 14, GOLD, true).gravity = Gravity.CENTER
-        root.addView(brandPanel, LinearLayout.LayoutParams(0, -1, 0.34f).apply { marginEnd = 22 })
-
-        val details = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(8, 8, 8, 8)
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-        }
-        val statusView = TextView(this).apply {
-            text = "⚠  $status"
-            textSize = 18f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(GOLD)
-            gravity = Gravity.CENTER
-            background = rounded(0xFF15110A.toInt(), 28, GOLD, 2)
-            setPadding(24, 12, 24, 12)
-        }
-        details.addView(statusView, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = 12 })
-
-        addText(details, "To continue using the app", 31, WHITE, true).gravity = Gravity.CENTER
-        addText(details, "Please activate your device to start adding playlists.", 17, WHITE).gravity = Gravity.CENTER
-
-        val separator = View(this).apply { setBackgroundColor(GOLD) }
-        details.addView(separator, LinearLayout.LayoutParams(-1, 2).apply { topMargin = 14; bottomMargin = 14 })
-
-        addText(details, "Adding Playlist", 23, GOLD, true)
-        addText(details, "Visit our website:", 17, WHITE)
-        val website = makeAction("◎   colony-player.pages.dev   ›", true) {
-            try {
-                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://colony-player.pages.dev")))
-            } catch (_: Exception) {
-                Toast.makeText(this, "Unable to open website on this device", Toast.LENGTH_SHORT).show()
+        fun control(x: Float, y: Float, width: Float, height: Float, action: () -> Unit) {
+            val view = View(this).apply {
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { action() }
+                setOnFocusChangeListener { v, focused ->
+                    if (focused) v.background = rounded(android.graphics.Color.TRANSPARENT, 8, GOLD, 2)
+                    else v.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
             }
+            frame.addView(view, FrameLayout.LayoutParams((w * width).toInt(), (h * height).toInt(), Gravity.TOP or Gravity.LEFT).apply {
+                leftMargin = (w * x).toInt()
+                topMargin = (h * y).toInt()
+            })
         }
-        website.textSize = 20f
-        details.addView(website, LinearLayout.LayoutParams(-1, 54).apply { topMargin = 6; bottomMargin = 12 })
 
-        addText(details, "Log in using your Device Address and Key", 20, GOLD, true)
-        val credentials = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = rounded(0xFF191A20.toInt(), 16, 0xFF383B43.toInt())
-            setPadding(18, 12, 18, 12)
-        }
-        val macColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        addText(macColumn, "MAC ADDRESS", 13, MUTED, true)
-        val macValue = TextView(this).apply {
-            text = deviceId
-            textSize = 21f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setTextColor(WHITE)
-            setPadding(2, 5, 2, 5)
-        }
-        macColumn.addView(macValue)
-        macColumn.addView(makeAction("COPY MAC", false) { copyToClipboard("MAC Address", deviceId) })
-        credentials.addView(macColumn, LinearLayout.LayoutParams(0, -2, 1.25f))
-
-        val divider = View(this).apply { setBackgroundColor(0xFF66616A.toInt()) }
-        credentials.addView(divider, LinearLayout.LayoutParams(1, 70).apply { marginStart = 14; marginEnd = 14 })
-
-        val keyColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        addText(keyColumn, "DEVICE KEY", 13, MUTED, true)
-        val keyValue = TextView(this).apply {
-            text = deviceKey
-            textSize = 23f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setTextColor(WHITE)
-            setPadding(2, 5, 2, 5)
-        }
-        keyColumn.addView(keyValue)
-        keyColumn.addView(makeAction("COPY KEY", false) { copyToClipboard("Device Key", deviceKey) })
-        credentials.addView(keyColumn, LinearLayout.LayoutParams(0, -2, 0.8f))
-        details.addView(credentials, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 10; bottomMargin = 12 })
-
-        addText(details, "Activate your device and enjoy!", 21, WHITE, true).gravity = Gravity.CENTER
-        val reload = makeAction("⟳   RELOAD", true) {
+        // Invisible remote/click zones over the controls in the approved image.
+        control(0.24f, 0.56f, 0.28f, 0.10f) { copyToClipboard("MAC Address", deviceId) }
+        control(0.55f, 0.56f, 0.24f, 0.10f) { copyToClipboard("Device Key", deviceKey) }
+        control(0.30f, 0.88f, 0.40f, 0.10f) {
             lifecycleScope.launch {
                 try {
+                    Toast.makeText(this@MainActivity, "جارٍ التحقق من الجهاز وتحميل القائمة…", Toast.LENGTH_SHORT).show()
+                    val reg = withContext(Dispatchers.IO) {
+                        api("POST", "/device/register", JSONObject().put("deviceId", deviceId).put("deviceKey", deviceKey))
+                    }
+                    if (!reg.optBoolean("ok")) error(apiError(reg))
                     authenticate()
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, e.message ?: "Activation check failed", Toast.LENGTH_LONG).show()
+                    showActivationScreen()
+                    Toast.makeText(this@MainActivity, e.message ?: "تعذر الاتصال بالخادم", Toast.LENGTH_LONG).show()
                 }
             }
         }
-        reload.textSize = 23f
-        details.addView(reload, LinearLayout.LayoutParams(260, 62).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = 12
-        })
-        root.addView(details, LinearLayout.LayoutParams(0, -1, 0.66f))
-        setContentView(root)
+        control(0.24f, 0.38f, 0.54f, 0.09f) {
+            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://colony-player.pages.dev")))
+        }
+
+        // Actual device credentials overlay the blank fields in the approved artwork.
+        fun value(text: String, x: Float, y: Float, width: Float) {
+            val v = TextView(this).apply {
+                this.text = text
+                textSize = 20f
+                typeface = android.graphics.Typeface.MONOSPACE
+                setTextColor(WHITE)
+                gravity = Gravity.CENTER
+                setShadowLayer(8f, 0f, 0f, android.graphics.Color.BLACK)
+            }
+            frame.addView(v, FrameLayout.LayoutParams((w * width).toInt(), (h * 0.055f).toInt(), Gravity.TOP or Gravity.LEFT).apply {
+                leftMargin = (w * x).toInt()
+                topMargin = (h * y).toInt()
+            })
+        }
+        value(deviceId, 0.27f, 0.575f, 0.25f)
+        value(deviceKey, 0.57f, 0.575f, 0.20f)
+
+        setContentView(frame)
+        frame.post { frame.getChildAt(1)?.requestFocus() }
     }
 
     private fun showConnectionError(message: String) {
