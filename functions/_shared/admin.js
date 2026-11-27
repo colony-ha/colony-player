@@ -3,7 +3,7 @@ import { json, randomHex, sha256 } from "./auth.js";
 const enc = new TextEncoder();
 const ITERATIONS = 210000;
 
-export { json };
+export { json, randomHex };
 
 export async function passwordHash(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
