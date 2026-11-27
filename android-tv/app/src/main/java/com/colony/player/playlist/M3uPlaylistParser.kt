@@ -22,10 +22,10 @@ object M3uPlaylistParser {
                 line.startsWith("#EXTINF", ignoreCase = true) -> pending = parseMetadata(line, entries.size)
                 line.startsWith("#") -> Unit
                 isHttpUrl(line) -> {
-                    val metadata = pending ?: Metadata("Channel \${entries.size + 1}", "Uncategorized", null, "")
+                    val metadata = pending ?: Metadata("Channel ${entries.size + 1}", "Uncategorized", null, "")
                     entries += MediaEntry(
                         id = stableId(line),
-                        title = metadata.title.ifBlank { "Item \${entries.size + 1}" },
+                        title = metadata.title.ifBlank { "Item ${entries.size + 1}" },
                         streamUrl = line,
                         groupName = metadata.group.ifBlank { "Uncategorized" },
                         logoUrl = metadata.logo,
@@ -52,7 +52,7 @@ object M3uPlaylistParser {
         val attributes = if (comma >= 0) line.substring(0, comma) else line
         val title = if (comma >= 0) line.substring(comma + 1).trim() else ""
         return Metadata(
-            title = title.ifBlank { attribute(attributes, "tvg-name").ifBlank { "Item \${index + 1}" } },
+            title = title.ifBlank { attribute(attributes, "tvg-name").ifBlank { "Item ${index + 1}" } },
             group = attribute(attributes, "group-title").ifBlank { "Uncategorized" },
             logo = attribute(attributes, "tvg-logo").ifBlank { null },
             extra = listOf(
@@ -64,13 +64,13 @@ object M3uPlaylistParser {
     }
 
     private fun attribute(source: String, key: String): String {
-        val expression = Regex("""(?:^|\s)\${Regex.escape(key)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))""", RegexOption.IGNORE_CASE)
+        val expression = Regex("""(?:^|\s)${Regex.escape(key)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))""", RegexOption.IGNORE_CASE)
         val match = expression.find(source) ?: return ""
         return (match.groups[1]?.value ?: match.groups[2]?.value ?: match.groups[3]?.value).orEmpty().trim()
     }
 
     private fun detectSection(meta: Metadata, url: String): MediaSection {
-        val value = "\${meta.group} \${meta.title} \${meta.extra} $url".lowercase()
+        val value = "${meta.group} ${meta.title} ${meta.extra} $url".lowercase()
         val series = listOf("series", "tv show", "season", "episode", "episod", "مسلسل", "مسلسلات", "موسم", "حلقة")
         val movies = listOf("movie", "movies", "vod", "film", "cinema", "أفلام", "فيلم", "سينما")
         return when {
