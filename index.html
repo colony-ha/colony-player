@@ -37,6 +37,16 @@
 <p class="form-status" id="loginStatus" role="status" aria-live="polite" data-i18n="loginNotice">أدخل بيانات الجهاز الظاهرة على شاشة التلفاز.</p></form></div>
 <div id="playlistPanel" hidden>
 <div class="form-head"><div><span class="form-kicker" data-i18n="playlistStep">الخطوة الثانية</span><h3 data-i18n="playlistTitle">قوائم التشغيل</h3></div><span class="form-number">02 / 02</span></div>
+<div class="subscription-box">
+  <div class="subscription-heading"><strong data-i18n="subscriptionTitle">حالة الاشتراك</strong><span id="subscriptionBadge" class="subscription-badge">...</span></div>
+  <p id="subscriptionDetails" class="subscription-details" aria-live="polite"></p>
+  <form id="activationForm">
+    <label for="activationCode" data-i18n="activationCodeLabel">كود الاشتراك السنوي</label>
+    <input id="activationCode" name="activationCode" placeholder="CP-XXXX-XXXX-XXXX" autocomplete="off" required>
+    <button class="btn btn-gold btn-full" type="submit" data-i18n="activateButton">تفعيل الاشتراك</button>
+    <p class="form-status" id="activationStatus" role="status" aria-live="polite"></p>
+  </form>
+</div>
 <form id="playlistForm">
 <label for="playlistName" data-i18n="playlistName">اسم القائمة</label><input id="playlistName" name="playlistName" placeholder="مثلاً: قائمتي" required>
 <label for="playlistType" data-i18n="playlistType">نوع القائمة</label><select id="playlistType" name="playlistType"><option value="m3u">M3U / M3U8</option><option value="xtream">Xtream Codes API</option></select>
