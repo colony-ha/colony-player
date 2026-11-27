@@ -8,30 +8,28 @@ export async function onRequestPost({ request, env }) {
     const validMac = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(deviceId);
     const legacyId = /^CP-[A-F0-9]{12,32}$/.test(deviceId);
     const validKey = /^\d{6}$/.test(deviceKey) || /^[A-Za-z0-9_-]{32,128}$/.test(deviceKey);
-    if ((!validMac && !legacyId) || !validKey) {
-      return json({ ok: false, error: "INVALID_DEVICE_DETAILS" }, 400);
-    }
+    if ((!validMac && !legacyId) || !validKey) return json({ ok: false, error: "INVALID_DEVICE_DETAILS" }, 400);
     if (!env.DB || !env.DEVICE_KEY_PEPPER) return json({ ok: false, error: "SERVER_NOT_CONFIGURED" }, 503);
 
     const now = Math.floor(Date.now() / 1000);
     const ip = request.headers.get("cf-connecting-ip") || "unknown";
-    const clientKey = await sha256(ip + ":" + deviceId);
+    // Versioned key ignores legacy counters that may have been filled by successful logins.
+    const clientKey = await sha256("login:v2:" + ip + ":" + deviceId);
+    await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < ?").bind(now - 86400).run();
+    const attempts = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM login_attempts WHERE client_key = ? AND attempted_at > ?"
+    ).bind(clientKey, now - 15 * 60).first();
+    if ((attempts?.total || 0) >= 10) return json({ ok: false, error: "TOO_MANY_ATTEMPTS" }, 429);
+
     const device = await env.DB.prepare(
       "SELECT id, device_key_hash, status, trial_ends_at, license_ends_at FROM devices WHERE device_id = ? LIMIT 1"
     ).bind(deviceId).first();
     const keyHash = await sha256(env.DEVICE_KEY_PEPPER + ":" + deviceKey);
-
     if (!device || device.device_key_hash !== keyHash || !["active", "blocked"].includes(device.status)) {
-      await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < ?").bind(now - 86400).run();
-      const attempts = await env.DB.prepare(
-        "SELECT COUNT(*) AS total FROM login_attempts WHERE client_key = ? AND attempted_at > ?"
-      ).bind(clientKey, now - 15 * 60).first();
-      if ((attempts?.total || 0) >= 10) return json({ ok: false, error: "TOO_MANY_ATTEMPTS" }, 429);
       await env.DB.prepare("INSERT INTO login_attempts (client_key, attempted_at) VALUES (?, ?)").bind(clientKey, now).run();
       return json({ ok: false, error: "DEVICE_NOT_AUTHORIZED" }, 401);
     }
 
-    // Successful sign-ins do not consume the failed-login rate limit.
     const access = entitlement(device);
     const token = randomHex(32);
     const tokenHash = await sha256(token);
