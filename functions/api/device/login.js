@@ -3,7 +3,7 @@ import { json, randomHex, sha256, entitlement } from "../../_shared/auth.js";
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const deviceId = String(body.deviceId || "").trim().toUpperCase().replace(/\\s+/g, "");
+    const deviceId = String(body.deviceId || "").trim().toUpperCase().replace(/\s+/g, "");
     const deviceKey = String(body.deviceKey || "").trim();
     if (deviceId.length < 6 || deviceId.length > 128 || deviceKey.length < 12 || deviceKey.length > 256) {
       return json({ ok: false, error: "INVALID_DEVICE_DETAILS" }, 400);
@@ -11,6 +11,14 @@ export async function onRequestPost({ request, env }) {
     if (!env.DB || !env.DEVICE_KEY_PEPPER) return json({ ok: false, error: "SERVER_NOT_CONFIGURED" }, 503);
 
     const now = Math.floor(Date.now() / 1000);
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    const clientKey = await sha256(ip + ":" + deviceId);
+    await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < ?").bind(now - 86400).run();
+    const attempts = await env.DB.prepare("SELECT COUNT(*) AS total FROM login_attempts WHERE client_key = ? AND attempted_at > ?")
+      .bind(clientKey, now - 15 * 60).first();
+    if ((attempts?.total || 0) >= 10) return json({ ok: false, error: "TOO_MANY_ATTEMPTS" }, 429);
+    await env.DB.prepare("INSERT INTO login_attempts (client_key, attempted_at) VALUES (?, ?)").bind(clientKey, now).run();
+
     const keyHash = await sha256(env.DEVICE_KEY_PEPPER + ":" + deviceKey);
     const id = crypto.randomUUID();
     await env.DB.prepare(
