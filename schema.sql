@@ -31,3 +31,10 @@ CREATE TABLE IF NOT EXISTS playlists (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_playlists_device ON playlists(device_id, created_at);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_key TEXT NOT NULL,
+  attempted_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_client_time ON login_attempts(client_key, attempted_at);
