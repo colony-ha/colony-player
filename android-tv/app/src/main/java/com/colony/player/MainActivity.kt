@@ -472,6 +472,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun play(stream: StreamItem) {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val history = (listOf(stream.url) + prefs.getString("history", "").orEmpty().split("\\n").filter { it.isNotBlank() }.filter { it != stream.url }).take(100)
+        prefs.edit().putString("history", history.joinToString("\\n")).apply()
         buildShell(stream.name, "مشغل الوسائط")
         val playerPanel = panel(0xFF050608.toInt())
         playerPanel.setPadding(5, 5, 5, 5)
