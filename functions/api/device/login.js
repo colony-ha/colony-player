@@ -34,8 +34,8 @@ export async function onRequestPost({ request, env }) {
     }
 
     const access = entitlement(device);
-    if (!access.active) return json({ ok: false, error: "SUBSCRIPTION_EXPIRED", entitlement: access }, 403);
 
+    // Allow expired devices to sign in to the website portal so they can redeem a subscription code.
     const token = randomHex(32);
     const tokenHash = await sha256(token);
     await env.DB.prepare(
