@@ -3,6 +3,12 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseStorePassword = System.getenv("COLONY_UPLOAD_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("COLONY_UPLOAD_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("COLONY_UPLOAD_KEY_PASSWORD")
+val hasReleaseSigning = !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.colony.player"
     compileSdk = 35
@@ -15,10 +21,22 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file("upload-keystore.jks")
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug { applicationIdSuffix = ".debug" }
         release {
             isMinifyEnabled = true
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
