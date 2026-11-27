@@ -50,8 +50,8 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        deviceId = prefs.getString("device_id", null) ?: randomDeviceId().also { prefs.edit().putString("device_id", it).apply() }
-        deviceKey = prefs.getString("device_key", null) ?: randomDeviceKey().also { prefs.edit().putString("device_key", it).apply() }
+        deviceId = prefs.getString("device_id", null)?.takeIf { it.matches(Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}")) } ?: randomDeviceId().also { prefs.edit().putString("device_id", it).apply() }
+        deviceKey = prefs.getString("device_key", null)?.takeIf { it.matches(Regex("[0-9]{6}")) } ?: randomDeviceKey().also { prefs.edit().putString("device_key", it).apply() }
         favorites.addAll(prefs.getStringSet("favorites", emptySet()) ?: emptySet())
         showMessage("جاري تهيئة COLONY PLAYER", "يرجى الانتظار…")
         lifecycleScope.launch {
@@ -528,8 +528,7 @@ class MainActivity : ComponentActivity() {
     private fun randomDeviceId(): String {
         val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         val random = SecureRandom()
-        val raw = (1..12).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")
-        return raw.chunked(4).joinToString(":")
+        return (1..6).joinToString(":") { "%02X".format(random.nextInt(256)) }
     }
 
     private fun randomDeviceKey(): String = "%06d".format(SecureRandom().nextInt(1_000_000))
