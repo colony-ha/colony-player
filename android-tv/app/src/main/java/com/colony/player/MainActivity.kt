@@ -418,19 +418,25 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun play(stream: StreamItem) {
-        base(stream.name)
-        val view = PlayerView(this)
-        root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
+        buildShell(stream.name, "مشغل الوسائط")
+        val playerPanel = panel(0xFF050608.toInt())
+        playerPanel.setPadding(5, 5, 5, 5)
+        val view = PlayerView(this).apply {
+            useController = true
+            controllerShowTimeoutMs = 5000
+        }
+        playerPanel.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
+        content.addView(playerPanel, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = 12 })
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        controls.addView(makeButton("إيقاف مؤقت") { player?.pause() })
-        controls.addView(makeButton("تشغيل") { player?.play() })
-        controls.addView(makeButton(if (favorites.contains(stream.url)) "إزالة من المفضلة" else "أضف للمفضلة") {
+        controls.addView(makeAction(if (favorites.contains(stream.url)) "★ إزالة من المفضلة" else "☆ أضف للمفضلة", false) {
             if (!favorites.add(stream.url)) favorites.remove(stream.url)
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putStringSet("favorites", favorites.toSet()).apply()
             play(stream)
         })
-        controls.addView(makeButton("رجوع") { player?.release(); player = null; showLibrary() })
-        root.addView(controls)
+        controls.addView(makeAction("العودة للمكتبة", true) {
+            player?.release(); player = null; showLibrary()
+        })
+        content.addView(controls, matchWrap())
         player?.release()
         player = ExoPlayer.Builder(this).build().also {
             view.player = it
