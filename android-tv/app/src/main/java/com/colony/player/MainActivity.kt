@@ -447,16 +447,132 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSubscription(entitlement: JSONObject?) {
-        buildShell("الاشتراك", "حالة الوصول إلى مكتبتك")
-        val panel = panel(0xFF211A17.toInt())
-        panel.setPadding(28, 24, 28, 24)
-        addText(panel, "الاشتراك يحتاج إلى تجديد", 26, GOLD, true)
-        addText(panel, "فعّل اشتراكك من موقع COLONY PLAYER، ثم أعد التحقق من الجهاز.", 17, WHITE)
-        content.addView(panel, matchWrap())
-        addAction(content, "إعادة التحقق", true) {
-            lifecycleScope.launch { try { authenticate() } catch (e: Exception) { showConnectionError(e.message ?: "فشل التحقق") } }
+        showActivationScreen(
+            if (entitlement == null) "DEVICE NOT ACTIVATED" else "SUBSCRIPTION INACTIVE"
+        )
+    }
+
+    private fun showActivationScreen(status: String = "DEVICE NOT ACTIVATED") {
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            setBackgroundColor(0xFF050505.toInt())
+            setPadding(22, 18, 22, 18)
         }
-        addAction(content, "بيانات ربط الجهاز", false) { deviceDialog() }
+
+        val brandPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(18, 20, 18, 20)
+            background = rounded(0xFF0A0A0A.toInt(), 22, GOLD, 2)
+        }
+        val emblem = TextView(this).apply {
+            text = "C"
+            textSize = 112f
+            gravity = Gravity.CENTER
+            typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
+            setTextColor(GOLD)
+        }
+        brandPanel.addView(emblem, LinearLayout.LayoutParams(-1, 150))
+        addText(brandPanel, "COLONY", 35, GOLD, true).gravity = Gravity.CENTER
+        addText(brandPanel, "PLAYER", 25, WHITE, true).gravity = Gravity.CENTER
+        addText(brandPanel, "STREAM  ·  ENJOY  ·  MORE", 14, GOLD, true).gravity = Gravity.CENTER
+        root.addView(brandPanel, LinearLayout.LayoutParams(0, -1, 0.34f).apply { marginEnd = 22 })
+
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(8, 8, 8, 8)
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+        }
+        val statusView = TextView(this).apply {
+            text = "⚠  $status"
+            textSize = 18f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(GOLD)
+            gravity = Gravity.CENTER
+            background = rounded(0xFF15110A.toInt(), 28, GOLD, 2)
+            setPadding(24, 12, 24, 12)
+        }
+        details.addView(statusView, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = 12 })
+
+        addText(details, "To continue using the app", 31, WHITE, true).gravity = Gravity.CENTER
+        addText(details, "Please activate your device to start adding playlists.", 17, WHITE).gravity = Gravity.CENTER
+
+        val separator = View(this).apply { setBackgroundColor(GOLD) }
+        details.addView(separator, LinearLayout.LayoutParams(-1, 2).apply { topMargin = 14; bottomMargin = 14 })
+
+        addText(details, "Adding Playlist", 23, GOLD, true)
+        addText(details, "Visit our website:", 17, WHITE)
+        val website = makeAction("◎   colony-player.pages.dev   ›", true) {
+            try {
+                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://colony-player.pages.dev")))
+            } catch (_: Exception) {
+                Toast.makeText(this, "Unable to open website on this device", Toast.LENGTH_SHORT).show()
+            }
+        }
+        website.textSize = 20f
+        details.addView(website, LinearLayout.LayoutParams(-1, 54).apply { topMargin = 6; bottomMargin = 12 })
+
+        addText(details, "Log in using your Device Address and Key", 20, GOLD, true)
+        val credentials = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(0xFF191A20.toInt(), 16, 0xFF383B43.toInt())
+            setPadding(18, 12, 18, 12)
+        }
+        val macColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        addText(macColumn, "MAC ADDRESS", 13, MUTED, true)
+        val macValue = TextView(this).apply {
+            text = deviceId
+            textSize = 21f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextColor(WHITE)
+            setPadding(2, 5, 2, 5)
+        }
+        macColumn.addView(macValue)
+        macColumn.addView(makeAction("COPY MAC", false) { copyToClipboard("MAC Address", deviceId) })
+        credentials.addView(macColumn, LinearLayout.LayoutParams(0, -2, 1.25f))
+
+        val divider = View(this).apply { setBackgroundColor(0xFF66616A.toInt()) }
+        credentials.addView(divider, LinearLayout.LayoutParams(1, 70).apply { marginStart = 14; marginEnd = 14 })
+
+        val keyColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        addText(keyColumn, "DEVICE KEY", 13, MUTED, true)
+        val keyValue = TextView(this).apply {
+            text = deviceKey
+            textSize = 23f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextColor(WHITE)
+            setPadding(2, 5, 2, 5)
+        }
+        keyColumn.addView(keyValue)
+        keyColumn.addView(makeAction("COPY KEY", false) { copyToClipboard("Device Key", deviceKey) })
+        credentials.addView(keyColumn, LinearLayout.LayoutParams(0, -2, 0.8f))
+        details.addView(credentials, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 10; bottomMargin = 12 })
+
+        addText(details, "Activate your device and enjoy!", 21, WHITE, true).gravity = Gravity.CENTER
+        val reload = makeAction("⟳   RELOAD", true) {
+            lifecycleScope.launch {
+                try {
+                    val reg = withContext(Dispatchers.IO) {
+                        api("POST", "/device/register", JSONObject().put("deviceId", deviceId).put("deviceKey", deviceKey))
+                    }
+                    if (!reg.optBoolean("ok")) error(apiError(reg))
+                    authenticate()
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, e.message ?: "Activation check failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        reload.textSize = 23f
+        details.addView(reload, LinearLayout.LayoutParams(260, 62).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = 12
+        })
+        root.addView(details, LinearLayout.LayoutParams(0, -1, 0.66f))
+        setContentView(root)
     }
 
     private fun showConnectionError(message: String) {
