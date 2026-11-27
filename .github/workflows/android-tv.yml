@@ -42,6 +42,13 @@ jobs:
             "https://raw.githubusercontent.com/colony-ha/colony-player/main/Colony%20Player%20Gold%20Emblem.png" \
             --output android-tv/app/src/main/res/drawable-nodpi/colony_player_logo.png
           test -s android-tv/app/src/main/res/drawable-nodpi/colony_player_logo.png
+      - name: Download approved COLONY PLAYER home screen artwork
+        run: |
+          mkdir -p android-tv/app/src/main/res/drawable-nodpi
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/colony-ha/colony-player/main/Colony%20Player%20Black-Gold%20IPTV%20Interface.png" \
+            --output android-tv/app/src/main/res/drawable-nodpi/colony_home_screen.png
+          test -s android-tv/app/src/main/res/drawable-nodpi/colony_home_screen.png
       - name: Build debug APK
         working-directory: android-tv
         run: gradle --no-daemon assembleDebug
