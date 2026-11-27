@@ -1,13 +1,12 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="320dp"
-    android:height="180dp"
-    android:viewportWidth="320"
-    android:viewportHeight="180">
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
     <path android:fillColor="#090B10" android:pathData="M0,0h320v180h-320z"/>
-    <path android:fillColor="#151A22" android:pathData="M0,0h320v180h-320z"/>
-    <path android:fillColor="#E6BD68" android:pathData="M80,33 C66,23 51,18 35,18 C-3,18 -34,49 -34,87 C-34,125 -3,156 35,156 C52,156 67,150 81,141 L69,123 C59,131 47,136 35,136 C8,136 -14,114 -14,87 C-14,60 8,38 35,38 C47,38 59,42 68,51 Z"/>
-    <path android:fillColor="#E6BD68" android:pathData="M26,58 C22,55 17,58 17,63 L17,111 C17,117 23,120 27,116 L68,92 C73,89 73,84 68,81 Z"/>
-    <path android:fillColor="#090B10" android:pathData="M37,69 L59,85 L37,101 Z"/>
-    <path android:fillColor="#E6BD68" android:pathData="M116,49h8v62h-8zM133,49h8v62h-8zM150,49h8v62h-8zM167,49h8v62h-8zM184,49h8v62h-8zM201,49h8v62h-8zM218,49h8v62h-8zM235,49h8v62h-8zM252,49h8v62h-8z"/>
-    <path android:fillColor="#E6BD68" android:pathData="M113,124h150v3h-150z"/>
+    <path android:fillColor="#00000000" android:strokeColor="#E6BD68" android:strokeWidth="9"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M83,46 C70,34 53,28 36,28 C1,28 -24,55 -24,90 C-24,125 1,152 36,152 C54,152 71,145 84,132"/>
+    <path android:fillColor="#E6BD68" android:pathData="M27,64 C27,60 32,57 36,60 L75,84 C79,87 79,93 75,96 L36,120 C32,123 27,120 27,116 Z"/>
+    <path android:fillColor="#090B10" android:pathData="M42,76 L61,88 L42,100 Z"/>
+    <path android:fillColor="#E6BD68" android:pathData="M111,59h8v62h-8zM127,59h8v62h-8zM143,59h8v62h-8zM159,59h8v62h-8zM175,59h8v62h-8zM191,59h8v62h-8zM207,59h8v62h-8zM223,59h8v62h-8zM239,59h8v62h-8zM255,59h8v62h-8z"/>
+    <path android:fillColor="#E6BD68" android:pathData="M111,131h152v3h-152z"/>
 </vector>
