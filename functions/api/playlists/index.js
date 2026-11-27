@@ -1,10 +1,13 @@
 import { json, currentDevice, entitlement, encryptText } from "../../_shared/auth.js";
 
+function canUsePlaylists(device) {
+  return device.status === "active" && entitlement(device).active;
+}
+
 export async function onRequestGet({ request, env }) {
   const device = await currentDevice(request, env);
   if (!device) return json({ ok: false, error: "UNAUTHORIZED" }, 401);
-  const access = entitlement(device);
-  if (!access.active) return json({ ok: false, error: "SUBSCRIPTION_EXPIRED" }, 403);
+  if (!canUsePlaylists(device)) return json({ ok: false, error: device.status === "blocked" ? "DEVICE_BLOCKED" : "SUBSCRIPTION_EXPIRED" }, 403);
   const result = await env.DB.prepare(
     "SELECT id, name, playlist_type, created_at, updated_at FROM playlists WHERE device_id = ? ORDER BY created_at DESC"
   ).bind(device.id).all();
@@ -14,15 +17,12 @@ export async function onRequestGet({ request, env }) {
 export async function onRequestPost({ request, env }) {
   const device = await currentDevice(request, env);
   if (!device) return json({ ok: false, error: "UNAUTHORIZED" }, 401);
-  const access = entitlement(device);
-  if (!access.active) return json({ ok: false, error: "SUBSCRIPTION_EXPIRED" }, 403);
+  if (!canUsePlaylists(device)) return json({ ok: false, error: device.status === "blocked" ? "DEVICE_BLOCKED" : "SUBSCRIPTION_EXPIRED" }, 403);
   const body = await request.json();
   const name = String(body.name || "").trim().slice(0, 80);
   const type = String(body.type || "m3u");
   const url = String(body.url || "").trim();
-  if (!name || !url || url.length > 8000 || !["m3u", "xtream"].includes(type)) {
-    return json({ ok: false, error: "INVALID_PLAYLIST" }, 400);
-  }
+  if (!name || !url || url.length > 8000 || !["m3u", "xtream"].includes(type)) return json({ ok: false, error: "INVALID_PLAYLIST" }, 400);
   if (!/^https?:\/\//i.test(url)) return json({ ok: false, error: "INVALID_PLAYLIST_URL" }, 400);
   let encrypted;
   try { encrypted = await encryptText(url, env.PLAYLIST_ENCRYPTION_KEY); }
