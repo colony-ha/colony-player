@@ -556,10 +556,6 @@ class MainActivity : ComponentActivity() {
         val reload = makeAction("⟳   RELOAD", true) {
             lifecycleScope.launch {
                 try {
-                    val reg = withContext(Dispatchers.IO) {
-                        api("POST", "/device/register", JSONObject().put("deviceId", deviceId).put("deviceKey", deviceKey))
-                    }
-                    if (!reg.optBoolean("ok")) error(apiError(reg))
                     authenticate()
                 } catch (e: Exception) {
                     Toast.makeText(this@MainActivity, e.message ?: "Activation check failed", Toast.LENGTH_LONG).show()
