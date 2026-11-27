@@ -19,3 +19,9 @@ export async function onRequestPost({request,env}) {
     return json({ok:true,message:"ADMIN_CREATED"});
   } catch { return json({ok:false,error:"SETUP_FAILED"},500); }
 }
+
+export async function onRequestGet({env}) {
+  if (!env.DB) return json({ok:false,error:"SERVER_NOT_CONFIGURED"},503);
+  const row=await env.DB.prepare("SELECT COUNT(*) AS total FROM admin_accounts").first();
+  return json({ok:true,setupRequired:(row?.total||0)===0});
+}
