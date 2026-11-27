@@ -40,7 +40,7 @@ private const val MUTED = 0xFFAAA39A.toInt()
 data class MediaEntry(val title: String, val url: String, val group: String, val logo: String, val type: String)
 
 class MainActivity : ComponentActivity() {
-    private val http = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+    private val http = OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS).retryOnConnectionFailure(true).build()
     private lateinit var deviceId: String
     private lateinit var deviceKey: String
     private var token = ""
@@ -57,29 +57,28 @@ class MainActivity : ComponentActivity() {
         deviceId = prefs.getString("device_id", null) ?: newDeviceId().also { prefs.edit().putString("device_id", it).apply() }
         deviceKey = prefs.getString("device_key", null) ?: newDeviceKey().also { prefs.edit().putString("device_key", it).apply() }
         showActivation()
-        registerInBackground()
     }
 
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject {
         val builder = Request.Builder().url(API + path).header("Accept", "application/json")
         if (token.isNotBlank()) builder.header("Authorization", "Bearer $token")
         if (method == "POST") builder.post((body ?: JSONObject()).toString().toRequestBody("application/json".toMediaType())) else builder.get()
-        http.newCall(builder.build()).execute().use { response ->
-            val raw = response.body?.string().orEmpty()
-            val json = if (raw.isBlank()) JSONObject() else JSONObject(raw)
-            if (!response.isSuccessful && !json.has("error")) json.put("error", "HTTP_${response.code}")
-            return json
-        }
-    }
-
-    private fun registerInBackground() {
-        lifecycleScope.launch {
+        val callRequest = builder.header("Connection", "close").build()
+        var lastError: Exception? = null
+        repeat(2) { attempt ->
             try {
-                withContext(Dispatchers.IO) {
-                    request("POST", "/device/register", JSONObject().put("deviceId", deviceId).put("deviceKey", deviceKey))
+                http.newCall(callRequest).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    val json = if (raw.isBlank()) JSONObject().put("error", "EMPTY_SERVER_RESPONSE") else JSONObject(raw)
+                    if (!response.isSuccessful && !json.has("error")) json.put("error", "HTTP_${response.code}")
+                    return json
                 }
-            } catch (_: Exception) { }
+            } catch (e: java.io.IOException) {
+                lastError = e
+                if (attempt == 0) Thread.sleep(350)
+            }
         }
+        throw lastError ?: java.io.IOException("تعذر إكمال الاتصال بالسيرفر.")
     }
 
     private fun reload() {
