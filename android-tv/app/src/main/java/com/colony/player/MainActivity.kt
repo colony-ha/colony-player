@@ -127,6 +127,65 @@ class MainActivity : ComponentActivity() {
         openPlaylist()
     }
 
+    private fun openPlaylist() {
+        lifecycleScope.launch {
+            try {
+                val source = withContext(Dispatchers.IO) { api("GET", "/playlists/$playlistId/source") }
+                if (!source.optBoolean("ok")) error(apiError(source))
+                val playlistUrl = source.getJSONObject("playlist").getString("url")
+                val playlistText = withContext(Dispatchers.IO) {
+                    val request = Request.Builder().url(playlistUrl)
+                        .header("User-Agent", "COLONY PLAYER/1.0")
+                        .header("Accept", "*/*").build()
+                    http.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) error("تعذر تحميل القائمة: HTTP ${response.code}")
+                        response.body?.string().orEmpty()
+                    }
+                }
+                streams = parseM3u(playlistText)
+                if (streams.isEmpty()) {
+                    showConnectionError("القائمة فارغة أو ليست بصيغة M3U مدعومة حالياً.")
+                } else {
+                    selectedSection = "الكل"
+                    showLibrary()
+                }
+            } catch (e: Exception) {
+                showConnectionError(e.message ?: "تعذر فتح قائمة التشغيل")
+            }
+        }
+    }
+
+    private fun parseM3u(text: String): List<StreamItem> {
+        val result = mutableListOf<StreamItem>()
+        var pendingName = ""
+        var pendingGroup = "عام"
+        var pendingLogo = ""
+        val lines = text.removePrefix("\uFEFF").lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
+        for (line in lines) {
+            if (line.startsWith("#EXTINF", true)) {
+                val group = Regex("""group-title="([^"]*)"""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1)
+                val logo = Regex("""tvg-logo="([^"]*)"""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1)
+                pendingGroup = group?.takeIf { it.isNotBlank() } ?: "عام"
+                pendingLogo = logo.orEmpty()
+                pendingName = line.substringAfterLast(",", "").trim().ifBlank {
+                    Regex("""tvg-name="([^"]*)"""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1).orEmpty()
+                }
+            } else if (!line.startsWith("#") && (line.startsWith("http://", true) || line.startsWith("https://", true))) {
+                val classification = (pendingGroup + " " + pendingName).lowercase()
+                val kind = when {
+                    listOf("movie", "vod", "film", "أفلام", "فيلم").any { it in classification } -> "movie"
+                    listOf("series", "show", "مسلسل", "مسلسلات").any { it in classification } -> "series"
+                    else -> "live"
+                }
+                result.add(StreamItem(pendingName.ifBlank { "قناة ${result.size + 1}" }, line, pendingGroup, pendingLogo, kind))
+                pendingName = ""
+                pendingGroup = "عام"
+                pendingLogo = ""
+            }
+        }
+        return result
+    }
+
     private fun showEmptyLibrary() {
         buildShell("الرئيسية", "أهلاً بك في COLONY PLAYER")
         val panel = panel(0xFF17191F.toInt())
@@ -466,16 +525,13 @@ class MainActivity : ComponentActivity() {
             setPadding(18, 20, 18, 20)
             background = rounded(0xFF0A0A0A.toInt(), 22, GOLD, 2)
         }
-        val emblem = TextView(this).apply {
-            text = "C"
-            textSize = 112f
-            gravity = Gravity.CENTER
-            typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
-            setTextColor(GOLD)
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.colony_player_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            contentDescription = "COLONY PLAYER"
         }
-        brandPanel.addView(emblem, LinearLayout.LayoutParams(-1, 150))
-        addText(brandPanel, "COLONY", 35, GOLD, true).gravity = Gravity.CENTER
-        addText(brandPanel, "PLAYER", 25, WHITE, true).gravity = Gravity.CENTER
+        brandPanel.addView(logo, LinearLayout.LayoutParams(-1, 0, 1f))
         addText(brandPanel, "STREAM  ·  ENJOY  ·  MORE", 14, GOLD, true).gravity = Gravity.CENTER
         root.addView(brandPanel, LinearLayout.LayoutParams(0, -1, 0.34f).apply { marginEnd = 22 })
 
