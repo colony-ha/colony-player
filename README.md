@@ -5,7 +5,7 @@ Official website and device portal for COLONY PLAYER.
 ## Current scope
 - Responsive Arabic-first marketing website (Arabic, English, French)
 - Product overview, supported TV platforms, setup steps, device connection UI, and support section
-- The connection form is intentionally front-end only until the secure API and database are implemented. It does not store or transmit playlist credentials.
+- Device sign-in and playlist management are implemented as Cloudflare Pages Functions; they become live after the D1 binding and encrypted secrets are configured.
 
 ## Planned platform
 - Samsung Smart TV (Tizen)
