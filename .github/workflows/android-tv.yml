@@ -33,6 +33,13 @@ jobs:
       - name: Build debug APK
         working-directory: android-tv
         run: gradle --no-daemon assembleDebug
+      - name: Upload debug APK for device testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: COLONY-PLAYER-AndroidTV-debug
+          path: android-tv/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Build release APK and AAB (unsigned)
         working-directory: android-tv
         run: gradle --no-daemon assembleRelease bundleRelease
