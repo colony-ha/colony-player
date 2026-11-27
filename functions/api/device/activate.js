@@ -6,7 +6,7 @@ export async function onRequestPost({ request, env }) {
 
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "INVALID_REQUEST" }, 400); }
-  const code = String(body.code || "").trim().toUpperCase().replace(/[\\s-]/g, "");
+  const code = String(body.code || "").trim().toUpperCase().replace(/[\s-]/g, "");
   if (code.length < 8 || code.length > 64) return json({ ok: false, error: "INVALID_OR_USED_CODE" }, 400);
 
   const now = Math.floor(Date.now() / 1000);
