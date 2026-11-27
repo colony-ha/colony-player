@@ -105,118 +105,297 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var selectedSection = "الكل"
+    private var selectedPlaylistName = "مكتبتي"
+    private val sectionNames = listOf("الكل", "مباشر", "أفلام", "مسلسلات", "المفضلة")
+    private val cardPalette = listOf(0xFF17243A.toInt(), 0xFF282033.toInt(), 0xFF18332F.toInt(), 0xFF33251C.toInt(), 0xFF1D2B3B.toInt())
+
     private fun showPlaylists(list: JSONArray) {
-        base("COLONY PLAYER")
-        text("قوائم التشغيل", 26, GOLD, true)
-        text("اختر قائمة لعرض القنوات والأفلام والمسلسلات", 17, MUTED)
-        if (list.length() == 0) {
-            text("لا توجد قوائم. أضف قائمة M3U أو Xtream من بوابة الموقع.", 19, WHITE, true)
-        } else for (i in 0 until list.length()) {
+        val names = mutableListOf<Pair<String, String>>()
+        for (i in 0 until list.length()) {
             val item = list.getJSONObject(i)
-            button(item.optString("name", "قائمة تشغيل") + "  •  " + item.optString("playlist_type", "m3u").uppercase()) {
-                playlistId = item.getString("id")
-                openPlaylist()
-            }
+            names.add(item.optString("id") to item.optString("name", "قائمة تشغيل"))
         }
-        button("بيانات ربط الجهاز") { deviceDialog() }
-        button("تحديث القوائم") { loadPlaylists() }
-        text("YOUR ENTERTAINMENT. YOUR PLAYER.", 13, MUTED)
+        if (names.isEmpty()) {
+            showEmptyLibrary()
+            return
+        }
+        if (playlistId.isBlank()) {
+            playlistId = names.first().first
+            selectedPlaylistName = names.first().second
+        }
+        openPlaylist()
     }
 
-    private fun openPlaylist() {
-        showMessage("جاري تحميل القائمة", "قد يستغرق ذلك لحظات حسب حجم القائمة…")
-        lifecycleScope.launch {
-            try {
-                val response = withContext(Dispatchers.IO) { api("GET", "/playlists/$playlistId/source") }
-                if (!response.optBoolean("ok")) error(apiError(response))
-                val p = response.getJSONObject("playlist")
-                val raw = withContext(Dispatchers.IO) { downloadPlaylist(p.optString("type"), p.getString("url")) }
-                streams = withContext(Dispatchers.Default) { parseM3u(raw) }
-                if (streams.isEmpty()) error("لم يتم العثور على عناصر صالحة في القائمة.")
-                showLibrary()
-            } catch (e: Exception) { showConnectionError(e.message ?: "تعذر تحميل القائمة") }
-        }
+    private fun showEmptyLibrary() {
+        buildShell("الرئيسية", "أهلاً بك في COLONY PLAYER")
+        val panel = panel(0xFF17191F.toInt())
+        panel.orientation = LinearLayout.VERTICAL
+        panel.setPadding(30, 28, 30, 28)
+        addText(panel, "ابدأ مكتبتك الخاصة", 27, GOLD, true)
+        addText(panel, "أضف قوائم M3U أو Xtream من موقع COLONY PLAYER، وستظهر هنا تلقائياً.", 17, MUTED)
+        addAction(panel, "تحديث القوائم", true) { loadPlaylists() }
+        addAction(panel, "عرض بيانات الجهاز", false) { deviceDialog() }
+        content.addView(panel, matchWrap())
+        addFooter()
     }
 
-    private fun downloadPlaylist(type: String, source: String): String {
-        val url = if (type == "xtream") xtreamUrl(source) else source
-        val request = Request.Builder().url(url).header("User-Agent", "COLONY PLAYER AndroidTV").build()
-        http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("فشل تحميل المصدر: HTTP ${response.code}")
-            return response.body?.string()?.take(25_000_000) ?: ""
-        }
-    }
-
-    private fun xtreamUrl(source: String): String {
-        val uri = android.net.Uri.parse(source)
-        val user = uri.getQueryParameter("username")
-        val pass = uri.getQueryParameter("password")
-        if (user.isNullOrBlank() || pass.isNullOrBlank()) return source
-        val base = source.substringBefore("?").trimEnd('/')
-        return "$base/get.php?username=${URLEncoder.encode(user, "UTF-8")}&password=${URLEncoder.encode(pass, "UTF-8")}&type=m3u_plus&output=ts"
-    }
-
-    private fun parseM3u(content: String): List<StreamItem> {
-        val result = mutableListOf<StreamItem>()
-        var name = ""
-        var group = "عام"
-        var logo = ""
-        var kind = "live"
-        for (raw in content.lineSequence()) {
-            val line = raw.trim()
-            if (line.startsWith("#EXTINF", true)) {
-                val comma = line.lastIndexOf(',')
-                name = if (comma >= 0) line.substring(comma + 1).trim() else "بدون اسم"
-                group = Regex("""group-title=["']([^"']*)""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1)?.ifBlank { "عام" } ?: "عام"
-                logo = Regex("""tvg-logo=["']([^"']*)""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1) ?: ""
-                kind = when {
-                    group.contains("movie", true) || group.contains("vod", true) || group.contains("أفلام") -> "movie"
-                    group.contains("series", true) || group.contains("مسلسل") -> "series"
-                    else -> "live"
-                }
-            } else if (line.isNotBlank() && !line.startsWith("#") && name.isNotBlank()) {
-                if (line.startsWith("http://") || line.startsWith("https://")) result.add(StreamItem(name, line, group, logo, kind))
-                name = ""; group = "عام"; logo = ""; kind = "live"
-            }
-        }
-        return result
-    }
+    private lateinit var content: LinearLayout
+    private lateinit var sideNav: LinearLayout
+    private lateinit var topTitle: TextView
 
     private fun showLibrary() {
-        base("مكتبة COLONY PLAYER")
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf("الكل", "مباشر", "أفلام", "مسلسلات", "المفضلة").forEach { label ->
-            bar.addView(makeButton(label) { category = label; showLibrary() })
+        buildShell("الرئيسية", "مرحباً بك في مكتبتك")
+        val hero = panel(0xFF171A20.toInt())
+        hero.orientation = LinearLayout.HORIZONTAL
+        hero.gravity = Gravity.CENTER_VERTICAL
+        hero.setPadding(30, 22, 30, 22)
+        val heroCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        addText(heroCopy, "YOUR ENTERTAINMENT.", 13, GOLD, true)
+        addText(heroCopy, "كل ما تحب… في مكان واحد", 27, WHITE, true)
+        addText(heroCopy, "$selectedPlaylistName  ·  ${streams.size} عنصر", 15, MUTED)
+        hero.addView(heroCopy, LinearLayout.LayoutParams(0, -2, 1f))
+        val heroButton = makeAction("استكشف المكتبة", true) { showSection("الكل") }
+        hero.addView(heroButton)
+        content.addView(hero, matchWrap())
+
+        val stats = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val liveCount = streams.count { it.kind == "live" }
+        val movieCount = streams.count { it.kind == "movie" }
+        val seriesCount = streams.count { it.kind == "series" }
+        addStat(stats, "قنوات مباشرة", liveCount.toString(), "◉")
+        addStat(stats, "أفلام", movieCount.toString(), "▣")
+        addStat(stats, "مسلسلات", seriesCount.toString(), "▤")
+        content.addView(stats, matchWrap())
+
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        root.addView(bar)
-        val visible = streams.filter {
-            when (category) {
-                "مباشر" -> it.kind == "live"
-                "أفلام" -> it.kind == "movie"
-                "مسلسلات" -> it.kind == "series"
-                "المفضلة" -> favorites.contains(it.url)
-                else -> true
+        addText(heading, "تصفح المحتوى", 21, WHITE, true)
+        content.addView(heading, matchWrap(0, 15, 0, 8))
+
+        val categories = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        sectionNames.forEach { label ->
+            categories.addView(makeAction(label, selectedSection == label) { showSection(label) },
+                LinearLayout.LayoutParams(-2, 48).apply { marginEnd = 9 })
+        }
+        content.addView(categories, matchWrap(0, 0, 0, 12))
+
+        val visible = filteredStreams()
+        addText(content, when(selectedSection) {
+            "مباشر" -> "القنوات المباشرة"
+            "أفلام" -> "الأفلام"
+            "مسلسلات" -> "المسلسلات"
+            "المفضلة" -> "المفضلة"
+            else -> "أضيفت إلى مكتبتك"
+        } + "  ·  ${visible.size}", 19, GOLD, true)
+        val grid = android.widget.GridLayout(this).apply {
+            columnCount = 3
+            useDefaultMargins = false
+            alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
+        }
+        visible.take(90).forEachIndexed { index, item ->
+            grid.addView(streamCard(item, index), android.widget.GridLayout.LayoutParams().apply {
+                width = 0
+                height = 148
+                columnSpec = android.widget.GridLayout.spec(index % 3, 1f)
+                setMargins(5, 5, 5, 5)
+            })
+        }
+        content.addView(grid, matchWrap())
+        if (visible.isEmpty()) addText(content, "لا توجد عناصر في هذا القسم حالياً.", 16, MUTED)
+        addFooter()
+    }
+
+    private fun filteredStreams(): List<StreamItem> = streams.filter {
+        when (selectedSection) {
+            "مباشر" -> it.kind == "live"
+            "أفلام" -> it.kind == "movie"
+            "مسلسلات" -> it.kind == "series"
+            "المفضلة" -> favorites.contains(it.url)
+            else -> true
+        }
+    }
+
+    private fun showSection(section: String) {
+        selectedSection = section
+        showLibrary()
+    }
+
+    private fun streamCard(item: StreamItem, index: Int): View {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.BOTTOM
+            setPadding(16, 12, 16, 14)
+            background = rounded(cardPalette[index % cardPalette.size], 18, 0xFF39404A.toInt())
+            isFocusable = true
+            isClickable = true
+            setOnClickListener { play(item) }
+            setOnFocusChangeListener { v, hasFocus ->
+                v.background = rounded(if (hasFocus) 0xFF3A3020.toInt() else cardPalette[index % cardPalette.size], 18,
+                    if (hasFocus) GOLD else 0xFF39404A.toInt(), if (hasFocus) 3 else 1)
             }
         }
-        text("${visible.size} عنصر", 14, MUTED)
-        val scroll = ScrollView(this)
-        val items = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        visible.take(1500).forEach { stream ->
-            val star = if (favorites.contains(stream.url)) " ★" else ""
-            items.addView(makeButton(stream.name + star + "  •  " + stream.group) { play(stream) })
+        val icon = when(item.kind) { "movie" -> "▶"; "series" -> "▤"; else -> "◉" }
+        addText(card, icon, 25, GOLD, true)
+        addText(card, item.name, 17, WHITE, true, 2)
+        addText(card, item.group, 12, MUTED, false, 1)
+        return card
+    }
+
+    private fun addStat(parent: LinearLayout, label: String, value: String, icon: String) {
+        val box = panel(0xFF17191F.toInt())
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(17, 13, 17, 13)
+        addText(box, icon + "  " + label, 13, MUTED, true)
+        addText(box, value, 24, GOLD, true)
+        parent.addView(box, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(4, 9, 4, 9) })
+    }
+
+    private fun buildShell(active: String, subtitle: String) {
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(0xFF0B0D11.toInt())
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
-        scroll.addView(items)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(makeButton("بحث") { search() })
-        actions.addView(makeButton("قوائم التشغيل") { loadPlaylists() })
-        actions.addView(makeButton("تحديث") { openPlaylist() })
-        root.addView(actions)
+        sideNav = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(15, 22, 15, 18)
+            setBackgroundColor(0xFF101319.toInt())
+        }
+        val brand = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(8, 7, 8, 24)
+        }
+        addText(brand, "C  ◈", 31, GOLD, true)
+        addText(brand, "COLONY", 20, WHITE, true)
+        addText(brand, "PLAYER", 12, GOLD, true)
+        sideNav.addView(brand)
+        addNav("⌂", "الرئيسية", active == "الرئيسية") { showLibrary() }
+        addNav("◉", "مباشر", selectedSection == "مباشر") { showSection("مباشر") }
+        addNav("▣", "أفلام", selectedSection == "أفلام") { showSection("أفلام") }
+        addNav("▤", "مسلسلات", selectedSection == "مسلسلات") { showSection("مسلسلات") }
+        addNav("★", "المفضلة", selectedSection == "المفضلة") { showSection("المفضلة") }
+        addNav("⌕", "بحث", false) { search() }
+        val spacer = View(this)
+        sideNav.addView(spacer, LinearLayout.LayoutParams(1, 0, 1f))
+        addNav("▤", "قوائم التشغيل", false) { loadPlaylists() }
+        addNav("⚙", "الجهاز", false) { deviceDialog() }
+        root.addView(sideNav, LinearLayout.LayoutParams(205, -1))
+
+        val main = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 18, 24, 12)
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, 12)
+        }
+        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        topTitle = TextView(this).apply {
+            text = active
+            textSize = 22f
+            setTextColor(WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        titles.addView(topTitle)
+        addText(titles, subtitle, 12, MUTED)
+        top.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(makeAction("بحث  ⌕", false) { search() })
+        top.addView(makeAction("تحديث", false) { loadPlaylists() })
+        main.addView(top)
+        val scroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
+        content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 3, 0, 24)
+        }
+        scroll.addView(content)
+        main.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(main, LinearLayout.LayoutParams(0, -1, 1f))
+        setContentView(root)
+    }
+
+    private fun addNav(icon: String, label: String, active: Boolean, action: () -> Unit) {
+        val item = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(13, 11, 13, 11)
+            background = rounded(if (active) 0xFF2D261A.toInt() else 0xFF101319.toInt(), 12,
+                if (active) GOLD else 0xFF252A32.toInt(), if (active) 2 else 1)
+            isFocusable = true
+            isClickable = true
+            setOnClickListener { action() }
+        }
+        addText(item, icon, 18, if (active) GOLD else MUTED, true)
+        addText(item, label, 15, if (active) WHITE else MUTED, active)
+        sideNav.addView(item, LinearLayout.LayoutParams(-1, 49).apply { bottomMargin = 5 })
+    }
+
+    private fun panel(color: Int): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = rounded(color, 18, 0xFF282D35.toInt())
+    }
+
+    private fun rounded(color: Int, radius: Int, stroke: Int = 0, strokeWidth: Int = 1): android.graphics.drawable.GradientDrawable =
+        android.graphics.drawable.GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius.toFloat()
+            if (stroke != 0) setStroke(strokeWidth, stroke)
+        }
+
+    private fun matchWrap(l: Int = 0, t: Int = 8, r: Int = 0, b: Int = 8) =
+        LinearLayout.LayoutParams(-1, -2).apply { setMargins(l, t, r, b) }
+
+    private fun addText(parent: LinearLayout, value: String, size: Int, color: Int,
+                        bold: Boolean = false, maxLines: Int = Int.MAX_VALUE): TextView {
+        val v = TextView(this).apply {
+            text = value
+            textSize = size.toFloat()
+            setTextColor(color)
+            if (bold) typeface = android.graphics.Typeface.DEFAULT_BOLD
+            this.maxLines = maxLines
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(2, 4, 2, 4)
+        }
+        parent.addView(v, LinearLayout.LayoutParams(-1, -2))
+        return v
+    }
+
+    private fun makeAction(label: String, primary: Boolean, action: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(if (primary) 0xFF17130A.toInt() else WHITE)
+            background = rounded(if (primary) GOLD else 0xFF222831.toInt(), 12,
+                if (primary) GOLD else 0xFF3A414C.toInt())
+            setPadding(18, 11, 18, 11)
+            isFocusable = true
+            isClickable = true
+            setOnFocusChangeListener { v, focused ->
+                v.background = rounded(if (primary || focused) GOLD else 0xFF222831.toInt(), 12,
+                    if (focused) WHITE else if (primary) GOLD else 0xFF3A414C.toInt(), 2)
+                setTextColor(if (primary || focused) 0xFF17130A.toInt() else WHITE)
+            }
+            setOnClickListener { action() }
+        }
+
+    private fun addAction(parent: LinearLayout, label: String, primary: Boolean, action: () -> Unit) {
+        parent.addView(makeAction(label, primary, action), matchWrap(0, 9, 0, 0))
+    }
+
+    private fun addFooter() {
+        addText(content, "COLONY PLAYER  •  YOUR ENTERTAINMENT. YOUR PLAYER.", 11, MUTED)
     }
 
     private fun search() {
         val input = EditText(this).apply { hint = "اسم القناة أو الفيلم"; setSingleLine(true) }
-        AlertDialog.Builder(this).setTitle("بحث").setView(input)
+        AlertDialog.Builder(this).setTitle("بحث في مكتبتك").setView(input)
             .setPositiveButton("بحث") { _, _ ->
                 val q = input.text.toString().trim()
                 showSearch(streams.filter { it.name.contains(q, true) || it.group.contains(q, true) })
@@ -224,14 +403,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSearch(found: List<StreamItem>) {
-        base("نتائج البحث")
-        text("${found.size} نتيجة", 15, MUTED)
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        found.take(500).forEach { item -> list.addView(makeButton(item.name) { play(item) }) }
-        scroll.addView(list)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        button("رجوع") { showLibrary() }
+        buildShell("نتائج البحث", "نتائج مطابقة لبحثك")
+        addText(content, "تم العثور على ${found.size} عنصر", 18, GOLD, true)
+        val grid = android.widget.GridLayout(this).apply { columnCount = 3 }
+        found.take(90).forEachIndexed { index, item ->
+            grid.addView(streamCard(item, index), android.widget.GridLayout.LayoutParams().apply {
+                width = 0; height = 145
+                columnSpec = android.widget.GridLayout.spec(index % 3, 1f)
+                setMargins(5, 5, 5, 5)
+            })
+        }
+        content.addView(grid, matchWrap())
+        addAction(content, "رجوع للمكتبة", false) { showLibrary() }
     }
 
     private fun play(stream: StreamItem) {
@@ -258,75 +441,39 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSubscription(entitlement: JSONObject?) {
-        base("الاشتراك")
-        text("انتهت صلاحية المشاهدة أو تم إيقاف الجهاز", 24, GOLD, true)
-        text("فعّل اشتراكك السنوي من موقع COLONY PLAYER ثم أعد التحقق.", 17, WHITE)
-        button("إعادة التحقق") {
-            lifecycleScope.launch {
-                try { authenticate() }
-                catch (e: Exception) { showConnectionError(e.message ?: "فشل التحقق") }
-            }
+        buildShell("الاشتراك", "حالة الوصول إلى مكتبتك")
+        val panel = panel(0xFF211A17.toInt())
+        panel.setPadding(28, 24, 28, 24)
+        addText(panel, "الاشتراك يحتاج إلى تجديد", 26, GOLD, true)
+        addText(panel, "فعّل اشتراكك من موقع COLONY PLAYER، ثم أعد التحقق من الجهاز.", 17, WHITE)
+        content.addView(panel, matchWrap())
+        addAction(content, "إعادة التحقق", true) {
+            lifecycleScope.launch { try { authenticate() } catch (e: Exception) { showConnectionError(e.message ?: "فشل التحقق") } }
         }
-        button("بيانات ربط الجهاز") { deviceDialog() }
+        addAction(content, "بيانات ربط الجهاز", false) { deviceDialog() }
     }
 
     private fun showConnectionError(message: String) {
-        base("COLONY PLAYER")
-        text(message, 20, GOLD, true)
-        text("تحقق من الإنترنت ثم أعد المحاولة.", 16, MUTED)
-        button("إعادة المحاولة") { recreate() }
-        button("بيانات ربط الجهاز") { deviceDialog() }
+        buildShell("تعذر الاتصال", "تحقق من اتصال الإنترنت")
+        val panel = panel(0xFF211A17.toInt())
+        panel.setPadding(24, 20, 24, 20)
+        addText(panel, message, 20, GOLD, true)
+        addText(panel, "تأكد من اتصال التلفاز بالإنترنت ثم أعد المحاولة.", 16, MUTED)
+        content.addView(panel, matchWrap())
+        addAction(content, "إعادة المحاولة", true) { recreate() }
+        addAction(content, "بيانات الجهاز", false) { deviceDialog() }
     }
 
     private fun showMessage(title: String, message: String) {
-        base(title)
-        text(message, 18, WHITE)
-        text("Device ID: $deviceId", 14, MUTED)
+        buildShell(title, "YOUR ENTERTAINMENT. YOUR PLAYER.")
+        addText(content, message, 20, WHITE, true)
+        addText(content, "DEVICE  ·  $deviceId", 13, MUTED)
     }
 
     private fun deviceDialog() {
         AlertDialog.Builder(this).setTitle("ربط جهازك")
             .setMessage("افتح موقع COLONY PLAYER من هاتفك، وأدخل بيانات هذا الجهاز في بوابة الربط.\\n\\nDevice ID:\\n$deviceId\\n\\nDevice Key:\\n$deviceKey\\n\\nلا تشارك المفتاح مع أي شخص.")
             .setPositiveButton("حسناً", null).show()
-    }
-
-    private fun base(title: String) {
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.TOP
-            setPadding(36, 20, 36, 20)
-            setBackgroundColor(BG)
-        }
-        val scroll = ScrollView(this)
-        scroll.addView(root)
-        setContentView(scroll)
-        text(title, 29, GOLD, true)
-    }
-
-    private fun text(value: String, size: Int, color: Int, bold: Boolean = false): TextView {
-        val v = TextView(this).apply {
-            text = value
-            textSize = size.toFloat()
-            setTextColor(color)
-            if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(8, 8, 8, 8)
-        }
-        root.addView(v)
-        return v
-    }
-
-    private fun button(label: String, action: () -> Unit) { root.addView(makeButton(label, action)) }
-
-    private fun makeButton(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label
-        textSize = 16f
-        isFocusable = true
-        isFocusableInTouchMode = true
-        setTextColor(GOLD)
-        setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF24201A.toInt()))
-        setPadding(16, 8, 16, 8)
-        setOnClickListener { action() }
-        layoutParams = LinearLayout.LayoutParams(-2, -2).apply { setMargins(5, 5, 5, 5) }
     }
 
     override fun onResume() {
