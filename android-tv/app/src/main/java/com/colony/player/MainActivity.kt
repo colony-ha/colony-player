@@ -97,7 +97,7 @@ class MainActivity : Activity() {
                 }
                 if (!login.optBoolean("ok")) error(messageFor(login.optString("error")))
                 token = login.getString("token")
-                if (!login.optJSONObject("device")?.optBoolean("playbackAllowed", false)!!) {
+                if (login.optJSONObject("device")?.optBoolean("playbackAllowed", false) != true) {
                     showActivation("الاشتراك غير نشط. فعّل جهازك من الموقع.")
                     return@launch
                 }
@@ -159,7 +159,7 @@ class MainActivity : Activity() {
         baseScreen()
         val spacer = View(this)
         root.addView(spacer, LinearLayout.LayoutParams(1, 0, 0.7f))
-        text(root, "COLONY PLAYER", 34, GOLD, true, Gravity.CENTER)
+        brand(root)
         text(root, "To continue using the app", 24, WHITE, true, Gravity.CENTER)
         text(root, "Adding Playlist", 19, GOLD, true, Gravity.CENTER)
         text(root, "Visit colony-player.pages.dev", 17, MUTED, false, Gravity.CENTER).apply {
@@ -204,11 +204,8 @@ class MainActivity : Activity() {
 
     private fun showHome() {
         baseScreen()
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        text(header, "COLONY PLAYER", 30, GOLD, true, Gravity.CENTER)
-        val filler = View(this); header.addView(filler, LinearLayout.LayoutParams(0, 1, 1f))
-        action(header, "DEVICE INFO", false) { deviceInfo() }
-        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 26 })
+        brand(root)
+        root.addView(View(this), LinearLayout.LayoutParams(1, 16))
         text(root, "YOUR ENTERTAINMENT. YOUR PLAYER.", 14, MUTED, true, Gravity.CENTER)
         val cards = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; weightSum = 3f }
         homeCard(cards, "LIVE TV", "قنوات البث المباشر", "live")
@@ -283,7 +280,15 @@ class MainActivity : Activity() {
         text(root, entry.title, 22, GOLD, true, Gravity.CENTER)
         val view = PlayerView(this).apply { useController = true }
         root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
-        action(root, "BACK TO LIBRARY", true) { player?.release(); player = null; showHome() }
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        action(controls, if (isFavorite(entry.url)) "REMOVE FAVORITE" else "ADD TO FAVORITES", false) {
+            val saved = getSharedPreferences(PREFS, MODE_PRIVATE).getStringSet("favorites", emptySet())?.toMutableSet() ?: mutableSetOf()
+            if (!saved.add(entry.url)) saved.remove(entry.url)
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putStringSet("favorites", saved).apply()
+            play(entry)
+        }
+        action(controls, "BACK TO HOME", true) { player?.release(); player = null; showHome() }
+        root.addView(controls, LinearLayout.LayoutParams(-1, -2))
         player?.release()
         player = ExoPlayer.Builder(this).build().also { it.setMediaItem(MediaItem.fromUri(entry.url)); view.player = it; it.prepare(); it.playWhenReady = true }
     }
@@ -306,6 +311,15 @@ class MainActivity : Activity() {
     private fun copy(label: String, value: String) {
         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, value))
         Toast.makeText(this, "$label copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun brand(parent: LinearLayout) {
+        val image = ImageView(this).apply {
+            setImageResource(R.drawable.colony_player_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "COLONY PLAYER"
+        }
+        parent.addView(image, LinearLayout.LayoutParams(260, 82).apply { gravity = Gravity.CENTER; bottomMargin = 10 })
     }
 
     private fun text(parent: LinearLayout, value: String, size: Int, color: Int, bold: Boolean, gravity: Int = Gravity.START): TextView {
