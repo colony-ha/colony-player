@@ -9,7 +9,7 @@ export async function onRequestPost({request,env}) {
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     if (secret !== env.ADMIN_SETUP_SECRET) return json({ok:false,error:"INVALID_SETUP_SECRET"},403);
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256)
       return json({ok:false,error:"INVALID_ADMIN_DETAILS"},400);
 
     // Ensure the bootstrap table exists even if an earlier schema step was skipped.
