@@ -5,39 +5,47 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json();
     const deviceId = String(body.deviceId || "").trim().toUpperCase().replace(/\s+/g, "");
     const deviceKey = String(body.deviceKey || "").trim();
+
     if (deviceId.length < 6 || deviceId.length > 128 || deviceKey.length < 12 || deviceKey.length > 256) {
       return json({ ok: false, error: "INVALID_DEVICE_DETAILS" }, 400);
     }
-    if (!env.DB || !env.DEVICE_KEY_PEPPER) return json({ ok: false, error: "SERVER_NOT_CONFIGURED" }, 503);
+    if (!env.DB || !env.DEVICE_KEY_PEPPER) {
+      return json({ ok: false, error: "SERVER_NOT_CONFIGURED" }, 503);
+    }
 
     const now = Math.floor(Date.now() / 1000);
     const ip = request.headers.get("cf-connecting-ip") || "unknown";
     const clientKey = await sha256(ip + ":" + deviceId);
+
     await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < ?").bind(now - 86400).run();
-    const attempts = await env.DB.prepare("SELECT COUNT(*) AS total FROM login_attempts WHERE client_key = ? AND attempted_at > ?")
-      .bind(clientKey, now - 15 * 60).first();
-    if ((attempts?.total || 0) >= 10) return json({ ok: false, error: "TOO_MANY_ATTEMPTS" }, 429);
-    await env.DB.prepare("INSERT INTO login_attempts (client_key, attempted_at) VALUES (?, ?)").bind(clientKey, now).run();
+    const attempts = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM login_attempts WHERE client_key = ? AND attempted_at > ?"
+    ).bind(clientKey, now - 15 * 60).first();
 
-    const keyHash = await sha256(env.DEVICE_KEY_PEPPER + ":" + deviceKey);
-    const id = crypto.randomUUID();
+    if ((attempts?.total || 0) >= 10) {
+      return json({ ok: false, error: "TOO_MANY_ATTEMPTS" }, 429);
+    }
+
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO devices (id, device_id, device_key_hash, created_at, trial_ends_at, status) VALUES (?, ?, ?, ?, ?, 'active')"
-    ).bind(id, deviceId, keyHash, now, now + 7 * 24 * 60 * 60).run();
+      "INSERT INTO login_attempts (client_key, attempted_at) VALUES (?, ?)"
+    ).bind(clientKey, now).run();
 
+    // Website login must only authenticate an existing device.
+    // Device registration will be handled by the TV app's provisioning flow.
     const device = await env.DB.prepare(
       "SELECT id, device_key_hash, status, trial_ends_at, license_ends_at FROM devices WHERE device_id = ? LIMIT 1"
     ).bind(deviceId).first();
 
+    const keyHash = await sha256(env.DEVICE_KEY_PEPPER + ":" + deviceKey);
     if (!device || device.device_key_hash !== keyHash || device.status !== "active") {
       return json({ ok: false, error: "DEVICE_NOT_AUTHORIZED" }, 401);
     }
 
     const access = entitlement(device);
-
-    // Allow expired devices to sign in to the website portal so they can redeem a subscription code.
+    // Expired devices may still enter the website portal to redeem an annual code.
     const token = randomHex(32);
     const tokenHash = await sha256(token);
+
     await env.DB.prepare(
       "INSERT INTO device_sessions (id, device_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"
     ).bind(crypto.randomUUID(), device.id, tokenHash, now, now + 30 * 24 * 60 * 60).run();
