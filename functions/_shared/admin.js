@@ -1,7 +1,7 @@
 import { json, randomHex, sha256 } from "./auth.js";
 
 const enc = new TextEncoder();
-const ITERATIONS = 210000;
+const ITERATIONS = 100000;
 
 export { json, randomHex };
 
