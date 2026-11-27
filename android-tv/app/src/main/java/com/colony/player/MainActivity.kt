@@ -204,67 +204,93 @@ class MainActivity : ComponentActivity() {
     private lateinit var topTitle: TextView
 
     private fun showLibrary() {
-        buildShell("الرئيسية", "مرحباً بك في مكتبتك")
-        val hero = panel(0xFF171A20.toInt())
-        hero.orientation = LinearLayout.HORIZONTAL
-        hero.gravity = Gravity.CENTER_VERTICAL
-        hero.setPadding(30, 22, 30, 22)
-        val heroCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        addText(heroCopy, "YOUR ENTERTAINMENT.", 13, GOLD, true)
-        addText(heroCopy, "كل ما تحب… في مكان واحد", 27, WHITE, true)
-        addText(heroCopy, "$selectedPlaylistName  ·  ${streams.size} عنصر", 15, MUTED)
-        hero.addView(heroCopy, LinearLayout.LayoutParams(0, -2, 1f))
-        val heroButton = makeAction("استكشف المكتبة", true) { showSection("الكل") }
-        hero.addView(heroButton)
-        content.addView(hero, matchWrap())
-
-        val stats = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val liveCount = streams.count { it.kind == "live" }
-        val movieCount = streams.count { it.kind == "movie" }
-        val seriesCount = streams.count { it.kind == "series" }
-        addStat(stats, "قنوات مباشرة", liveCount.toString(), "◉")
-        addStat(stats, "أفلام", movieCount.toString(), "▣")
-        addStat(stats, "مسلسلات", seriesCount.toString(), "▤")
-        content.addView(stats, matchWrap())
-
-        val heading = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // The approved artwork is the complete home screen. Keep it pixel-for-pixel;
+        // invisible focusable hit areas only connect the pictured controls.
+        val screen = FrameLayout(this)
+        val artwork = ImageView(this).apply {
+            setImageResource(R.drawable.colony_home_screen)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "COLONY PLAYER home screen"
         }
-        addText(heading, "تصفح المحتوى", 21, WHITE, true)
-        content.addView(heading, matchWrap(0, 15, 0, 8))
+        screen.addView(artwork, FrameLayout.LayoutParams(-1, -1))
 
-        val categories = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        sectionNames.forEach { label ->
-            categories.addView(makeAction(label, selectedSection == label) { showSection(label) },
-                LinearLayout.LayoutParams(-2, 48).apply { marginEnd = 9 })
+        val metrics = resources.displayMetrics
+        val screenW = metrics.widthPixels
+        val screenH = metrics.heightPixels
+        fun hit(x: Float, y: Float, w: Float, h: Float, action: () -> Unit) {
+            val outline = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.TRANSPARENT)
+                setStroke((3 * metrics.density).toInt().coerceAtLeast(2), GOLD)
+                cornerRadius = 18 * metrics.density
+            }
+            val target = View(this).apply {
+                isFocusable = true
+                isFocusableInTouchMode = true
+                isClickable = true
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                setOnFocusChangeListener { v, focused -> v.background = if (focused) outline else null }
+                setOnClickListener { action() }
+                contentDescription = "COLONY PLAYER control"
+            }
+            val lp = FrameLayout.LayoutParams((screenW * w).toInt(), (screenH * h).toInt(), Gravity.TOP or Gravity.LEFT)
+            lp.leftMargin = (screenW * x).toInt()
+            lp.topMargin = (screenH * y).toInt()
+            screen.addView(target, lp)
         }
-        content.addView(categories, matchWrap(0, 0, 0, 12))
 
-        val visible = filteredStreams()
-        addText(content, when(selectedSection) {
-            "مباشر" -> "القنوات المباشرة"
-            "أفلام" -> "الأفلام"
-            "مسلسلات" -> "المسلسلات"
-            "المفضلة" -> "المفضلة"
-            else -> "أضيفت إلى مكتبتك"
-        } + "  ·  ${visible.size}", 19, GOLD, true)
-        val grid = android.widget.GridLayout(this).apply {
-            columnCount = 3
-            useDefaultMargins = false
-            alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
+        // Three large category panels in the exact positions of the supplied image.
+        hit(0.025f, 0.285f, 0.312f, 0.435f) { showSection("مباشر") }
+        hit(0.351f, 0.285f, 0.303f, 0.435f) { showSection("أفلام") }
+        hit(0.668f, 0.285f, 0.309f, 0.435f) { showSection("مسلسلات") }
+
+        // Bottom controls: FAVORITES / HISTORY / UPDATE / LOGOUT / DEVICE INFO.
+        hit(0.025f, 0.820f, 0.187f, 0.118f) { showSection("المفضلة") }
+        hit(0.212f, 0.820f, 0.198f, 0.118f) { showHistory() }
+        hit(0.410f, 0.820f, 0.187f, 0.118f) { loadPlaylists() }
+        hit(0.597f, 0.820f, 0.190f, 0.118f) {
+            AlertDialog.Builder(this)
+                .setTitle("تسجيل الخروج")
+                .setMessage("هل تريد الرجوع إلى شاشة إضافة قائمة التشغيل؟")
+                .setNegativeButton("إلغاء", null)
+                .setPositiveButton("تأكيد") { _, _ ->
+                    playlistId = ""
+                    streams = emptyList()
+                    showEmptyLibrary()
+                }.show()
         }
-        visible.take(90).forEachIndexed { index, item ->
-            grid.addView(streamCard(item, index), android.widget.GridLayout.LayoutParams().apply {
-                width = 0
-                height = 148
-                columnSpec = android.widget.GridLayout.spec(index % 3, 1f)
-                setMargins(5, 5, 5, 5)
-            })
+        hit(0.787f, 0.820f, 0.190f, 0.118f) { deviceDialog() }
+
+        // Header gear and information symbols already present in the approved artwork.
+        hit(0.858f, 0.075f, 0.045f, 0.105f) { showHomeSettings() }
+        hit(0.940f, 0.075f, 0.045f, 0.105f) { deviceDialog() }
+
+        setContentView(screen)
+        screen.post { screen.getChildAt(1)?.requestFocus() }
+    }
+
+    private fun showHomeSettings() {
+        AlertDialog.Builder(this)
+            .setTitle("COLONY PLAYER")
+            .setItems(arrayOf("تحديث القوائم", "عرض بيانات الجهاز")) { _, which ->
+                if (which == 0) loadPlaylists() else deviceDialog()
+            }
+            .setNegativeButton("إغلاق", null)
+            .show()
+    }
+
+    private fun showHistory() {
+        val historyUrls = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getString("history", "")!!.split("\\n").filter { it.isNotBlank() }
+        val recent = historyUrls.mapNotNull { url -> streams.firstOrNull { it.url == url } }
+        buildShell("HISTORY", "سجل المشاهدة")
+        if (recent.isEmpty()) {
+            addText(content, "لا يوجد سجل مشاهدة بعد.", 19, MUTED)
+        } else {
+            recent.forEachIndexed { index, item ->
+                content.addView(streamCard(item, index), matchWrap())
+            }
         }
-        content.addView(grid, matchWrap())
-        if (visible.isEmpty()) addText(content, "لا توجد عناصر في هذا القسم حالياً.", 16, MUTED)
-        addFooter()
+        addAction(content, "العودة للرئيسية", true) { showLibrary() }
     }
 
     private fun filteredStreams(): List<StreamItem> = streams.filter {
@@ -314,66 +340,35 @@ class MainActivity : ComponentActivity() {
 
     private fun buildShell(active: String, subtitle: String) {
         root = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xFF0B0D11.toInt())
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF080808.toInt())
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-        }
-        sideNav = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(15, 22, 15, 18)
-            setBackgroundColor(0xFF101319.toInt())
-        }
-        val brand = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(8, 7, 8, 24)
-        }
-        addText(brand, "C  ◈", 31, GOLD, true)
-        addText(brand, "COLONY", 20, WHITE, true)
-        addText(brand, "PLAYER", 12, GOLD, true)
-        sideNav.addView(brand)
-        addNav("⌂", "الرئيسية", active == "الرئيسية") { showLibrary() }
-        addNav("◉", "مباشر", selectedSection == "مباشر") { showSection("مباشر") }
-        addNav("▣", "أفلام", selectedSection == "أفلام") { showSection("أفلام") }
-        addNav("▤", "مسلسلات", selectedSection == "مسلسلات") { showSection("مسلسلات") }
-        addNav("★", "المفضلة", selectedSection == "المفضلة") { showSection("المفضلة") }
-        addNav("⌕", "بحث", false) { search() }
-        val spacer = View(this)
-        sideNav.addView(spacer, LinearLayout.LayoutParams(1, 0, 1f))
-        addNav("▤", "قوائم التشغيل", false) { loadPlaylists() }
-        addNav("⚙", "الجهاز", false) { deviceDialog() }
-        root.addView(sideNav, LinearLayout.LayoutParams(205, -1))
-
-        val main = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 18, 24, 12)
-            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(28, 18, 28, 14)
         }
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 12)
+            setPadding(0, 0, 0, 14)
         }
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         topTitle = TextView(this).apply {
             text = active
-            textSize = 22f
-            setTextColor(WHITE)
+            textSize = 25f
+            setTextColor(GOLD)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         titles.addView(topTitle)
-        addText(titles, subtitle, 12, MUTED)
+        addText(titles, subtitle, 13, MUTED)
         top.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(makeAction("بحث  ⌕", false) { search() })
-        top.addView(makeAction("تحديث", false) { loadPlaylists() })
-        main.addView(top)
+        top.addView(makeAction("رجوع", false) { showLibrary() })
+        root.addView(top, matchWrap())
         val scroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 3, 0, 24)
+            setPadding(0, 5, 0, 24)
         }
         scroll.addView(content)
-        main.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(main, LinearLayout.LayoutParams(0, -1, 1f))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
 
