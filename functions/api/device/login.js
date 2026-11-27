@@ -5,7 +5,10 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json();
     const deviceId = String(body.deviceId || "").trim().toUpperCase().replace(/\s+/g, "");
     const deviceKey = String(body.deviceKey || "").trim();
-    if (deviceId.length < 6 || deviceId.length > 128 || deviceKey.length < 12 || deviceKey.length > 256) {
+    const validMac = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(deviceId);
+    const legacyId = /^CP-[A-F0-9]{12,32}$/.test(deviceId);
+    const validKey = /^\d{6}$/.test(deviceKey) || /^[A-Za-z0-9_-]{32,128}$/.test(deviceKey);
+    if ((!validMac && !legacyId) || !validKey) {
       return json({ ok: false, error: "INVALID_DEVICE_DETAILS" }, 400);
     }
     if (!env.DB || !env.DEVICE_KEY_PEPPER) return json({ ok: false, error: "SERVER_NOT_CONFIGURED" }, 503);
