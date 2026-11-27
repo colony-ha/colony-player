@@ -6,7 +6,7 @@ function dateText(value){return value?new Date(value*1000).toLocaleString():"—
 async function loadDevices(){
  const body=$("devicesBody");
  if(!body)return;
- body.innerHTML="<tr><td colspan='6'>جارٍ تحميل الأجهزة...</td></tr>";
+ body.innerHTML="<tr><td colspan='7'>جارٍ تحميل الأجهزة...</td></tr>";
  try{
   const d=await call("/devices");
   body.innerHTML="";
@@ -14,10 +14,11 @@ async function loadDevices(){
   for(const device of d.devices||[]){
    const tr=document.createElement("tr");
    const id=document.createElement("td");id.textContent=device.device_id;
+   const code=document.createElement("td");code.textContent=device.activation_code||"غير محفوظ (كود قديم)";
    const created=document.createElement("td");created.textContent=dateText(device.created_at);
    const entitlement=document.createElement("td");
    const expiry=device.license_ends_at&&device.license_ends_at>now?device.license_ends_at:device.trial_ends_at;
-   entitlement.textContent=device.license_ends_at&&device.license_ends_at>now?"اشتراك سنوي":device.trial_ends_at>now?"تجربة مجانية":"منتهي";
+   entitlement.textContent=device.status==="blocked"?"موقوف بالحظر":device.license_ends_at&&device.license_ends_at>now?"اشتراك سنوي":device.trial_ends_at>now?"تجربة مجانية":"منتهي";
    const expires=document.createElement("td");expires.textContent=dateText(expiry);
    const state=document.createElement("td");
    const badge=document.createElement("span");badge.className="status "+device.status;
@@ -28,19 +29,19 @@ async function loadDevices(){
     btn.textContent=device.status==="active"?"حظر الجهاز":"إلغاء الحظر";
     btn.addEventListener("click",async()=>{
      const block=device.status==="active";
-     if(!confirm(block?"هل تريد حظر هذا الجهاز؟ لن يتمكن من تسجيل الدخول أو تشغيل الخدمة.":"هل تريد إلغاء حظر هذا الجهاز؟"))return;
+     if(!confirm(block?"هل تريد حظر هذا الجهاز؟ سيتوقف تشغيل القوائم مؤقتاً، وسيبقى الاشتراك محفوظاً لاسترجاعه عند إلغاء الحظر.":"هل تريد إلغاء حظر هذا الجهاز؟"))return;
      btn.disabled=true;
      try{await call("/devices/"+encodeURIComponent(device.id),{method:"PATCH",body:JSON.stringify({action:block?"block":"unblock"})});await loadDevices()}
      catch(err){alert(readable(err.message));btn.disabled=false}
     });
     action.append(btn);
    }else action.textContent="—";
-   tr.append(id,created,entitlement,expires,state,action);body.append(tr);
+   tr.append(id,code,created,entitlement,expires,state,action);body.append(tr);
   }
-  if(!(d.devices||[]).length)body.innerHTML="<tr><td colspan='6'>لا توجد أجهزة مسجلة.</td></tr>";
+  if(!(d.devices||[]).length)body.innerHTML="<tr><td colspan='7'>لا توجد أجهزة مسجلة.</td></tr>";
  }catch(err){
   if(err.message==="UNAUTHORIZED"){token="";sessionStorage.removeItem("colony_admin_token");show("loginPanel")}
-  body.innerHTML="<tr><td colspan='6'>تعذر تحميل الأجهزة: "+readable(err.message)+"</td></tr>";
+  body.innerHTML="<tr><td colspan='7'>تعذر تحميل الأجهزة: "+readable(err.message)+"</td></tr>";
  }
 }
 async function loadCodes(){const body=$("codesBody");body.innerHTML="<tr><td colspan='5'>جارٍ التحميل...</td></tr>";try{const d=await call("/codes");body.innerHTML="";for(const c of d.codes){const tr=document.createElement("tr");const status=document.createElement("td"),created=document.createElement("td"),used=document.createElement("td"),device=document.createElement("td"),action=document.createElement("td");const badge=document.createElement("span");badge.className="status "+c.status;badge.textContent=c.status==="available"?"غير مستعمل":c.status==="redeemed"?"مستعمل":"ملغى";status.append(badge);created.textContent=new Date(c.created_at*1000).toLocaleString();used.textContent=c.redeemed_at?new Date(c.redeemed_at*1000).toLocaleString():"—";device.textContent=c.device_id||"—";if(c.status==="available"){const btn=document.createElement("button");btn.className="small-action";btn.textContent="إلغاء";btn.addEventListener("click",async()=>{if(!confirm("إلغاء هذا الكود؟"))return;try{await call("/codes/"+encodeURIComponent(c.id),{method:"DELETE"});await loadCodes()}catch(err){alert(readable(err.message))}});action.append(btn)}else action.textContent="—";tr.append(status,created,used,device,action);body.append(tr)}if(!d.codes.length)body.innerHTML="<tr><td colspan='5'>لا توجد أكواد بعد.</td></tr>"}catch(err){if(err.message==="UNAUTHORIZED"){token="";sessionStorage.removeItem("colony_admin_token");show("loginPanel")}message("loginNotice",readable(err.message))}}
