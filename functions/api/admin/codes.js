@@ -18,7 +18,7 @@ export async function onRequestPost({request,env}) {
     if (!Number.isInteger(count)||count<1||count>50) return json({ok:false,error:"INVALID_COUNT"},400);
     const created=[], statements=[];
     for(let i=0;i<count;i++){
-      const code=makeCode(), id=crypto.randomUUID(), hash=await sha256(code);
+      const code=makeCode(), id=crypto.randomUUID(), hash=await sha256(code.replace(/[\\s-]/g,"").toUpperCase());
       created.push(code);
       statements.push(env.DB.prepare("INSERT INTO activation_codes (id,code_hash,created_at,status) VALUES (?,?,?,'available')").bind(id,hash,Math.floor(Date.now()/1000)));
     }
