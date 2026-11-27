@@ -14,5 +14,5 @@ export async function onRequestPatch({request,env,params}) {
   ).bind(status,id).run();
   if (!result.meta?.changes) return json({ok:false,error:"DEVICE_NOT_FOUND_OR_REVOKED"},404);
   await audit(env,admin.id,action==="block"?"device_blocked":"device_unblocked","device",id);
-  return json({ok:true,status});
+  return json({ok:true,status,subscriptionPreserved:true});
 }
