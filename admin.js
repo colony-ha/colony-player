@@ -7,4 +7,4 @@ $("generateForm").addEventListener("submit",async e=>{e.preventDefault();const b
 $("copyCodes").addEventListener("click",async()=>{await navigator.clipboard.writeText($("codesText").textContent);$("copyCodes").textContent="تم النسخ"});
 $("refreshCodes").addEventListener("click",loadCodes);
 $("logoutButton").addEventListener("click",async()=>{try{await call("/logout",{method:"POST"})}catch{}token="";sessionStorage.removeItem("colony_admin_token");show("loginPanel")});
-(async()=>{if(token){try{const d=await call("/me");await dashboard(d.admin.email);return}catch{token="";sessionStorage.removeItem("colony_admin_token")}}try{const r=await fetch(API+"/me");if(r.status===401){const setup=await fetch(API+"/setup",{method:"GET"});show("loginPanel");}else show("loginPanel")}catch{show("loginPanel")}})();
+(async()=>{if(token){try{const d=await call("/me");await dashboard(d.admin.email);return}catch{token="";sessionStorage.removeItem("colony_admin_token")}}try{const r=await fetch(API+"/setup");const state=await r.json();show(state.setupRequired?"setupPanel":"loginPanel")}catch{show("loginPanel")}})();
