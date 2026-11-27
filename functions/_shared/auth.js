@@ -28,12 +28,15 @@ export async function currentDevice(request, env) {
      FROM device_sessions s JOIN devices d ON d.id = s.device_id
      WHERE s.token_hash = ? AND s.expires_at > ? LIMIT 1`
   ).bind(tokenHash, now).first();
-  if (!row || row.status !== "active") return null;
+  if (!row || !["active", "blocked"].includes(row.status)) return null;
   return row;
 }
 
 export function entitlement(device) {
   const now = Math.floor(Date.now() / 1000);
+  if (device.status === "blocked") {
+    return { active: false, type: "blocked", expiresAt: device.license_ends_at || device.trial_ends_at || null };
+  }
   if (device.license_ends_at && device.license_ends_at > now) {
     return { active: true, type: "annual", expiresAt: device.license_ends_at };
   }
@@ -58,6 +61,7 @@ export async function encryptText(value, secret) {
 }
 
 export async function decryptText(value, ivValue, secret) {
+  if (!secret) throw new Error("PLAYLIST_ENCRYPTION_KEY is not configured");
   const keyBytes = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
   const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
   const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(ivValue) }, key, fromBase64(value));
