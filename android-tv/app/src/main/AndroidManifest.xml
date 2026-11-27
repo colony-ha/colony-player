@@ -5,6 +5,8 @@
     <application
         android:allowBackup="false"
         android:label="COLONY PLAYER"
+        android:icon="@drawable/colony_icon"
+        android:banner="@drawable/colony_tv_banner"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="true">
         <activity
