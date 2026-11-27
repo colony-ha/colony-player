@@ -8,3 +8,7 @@
 .subscription-badge.is-expired{background:#2a1918;color:#e59b91}
 .subscription-details{font-size:11px;color:var(--muted);margin:10px 0 14px;line-height:1.8}
 .subscription-box label{margin-top:8px}
+
+/* Explicit logout button styling: prevent the browser's default white button surface. */
+#logoutButton{appearance:none;-webkit-appearance:none;display:flex;align-items:center;justify-content:center;min-height:46px;margin-top:18px;padding:13px 22px;width:100%;background:transparent!important;color:#e5dfd2!important;border:1px solid #6b5a37;border-radius:8px;font:700 13px 'Cairo',sans-serif;cursor:pointer;}
+#logoutButton:hover{background:#d5b46b12!important;border-color:var(--gold);color:var(--gold2)!important;}
