@@ -50,8 +50,8 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        deviceId = prefs.getString("device_id", null) ?: ("CP-" + randomHex(8).uppercase()).also { prefs.edit().putString("device_id", it).apply() }
-        deviceKey = prefs.getString("device_key", null) ?: randomToken().also { prefs.edit().putString("device_key", it).apply() }
+        deviceId = prefs.getString("device_id", null) ?: randomDeviceId().also { prefs.edit().putString("device_id", it).apply() }
+        deviceKey = prefs.getString("device_key", null) ?: randomDeviceKey().also { prefs.edit().putString("device_key", it).apply() }
         favorites.addAll(prefs.getStringSet("favorites", emptySet()) ?: emptySet())
         showMessage("جاري تهيئة COLONY PLAYER", "يرجى الانتظار…")
         lifecycleScope.launch {
@@ -473,13 +473,34 @@ class MainActivity : ComponentActivity() {
     private fun showMessage(title: String, message: String) {
         buildShell(title, "YOUR ENTERTAINMENT. YOUR PLAYER.")
         addText(content, message, 20, WHITE, true)
-        addText(content, "DEVICE  ·  $deviceId", 13, MUTED)
+        addText(content, "DEVICE ID", 12, MUTED, true)
+        addText(content, deviceId, 22, GOLD, true)
+        addText(content, "DEVICE KEY", 12, MUTED, true)
+        addText(content, deviceKey, 22, WHITE, true)
+        addAction(content, "نسخ Device ID", false) { copyToClipboard("Device ID", deviceId) }
+        addAction(content, "نسخ Device Key", false) { copyToClipboard("Device Key", deviceKey) }
     }
 
     private fun deviceDialog() {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 12, 24, 8)
+        }
+        addText(box, "DEVICE ID", 12, MUTED, true)
+        addText(box, deviceId, 23, GOLD, true)
+        addAction(box, "نسخ Device ID", false) { copyToClipboard("Device ID", deviceId) }
+        addText(box, "DEVICE KEY", 12, MUTED, true)
+        addText(box, deviceKey, 23, WHITE, true)
+        addAction(box, "نسخ Device Key", false) { copyToClipboard("Device Key", deviceKey) }
+        addText(box, "أدخل هاتين المعلومتين في موقع COLONY PLAYER. لا تشارك Device Key مع أي شخص.", 14, MUTED)
         AlertDialog.Builder(this).setTitle("ربط جهازك")
-            .setMessage("افتح موقع COLONY PLAYER من هاتفك، وأدخل بيانات هذا الجهاز في بوابة الربط.\\n\\nDevice ID:\\n$deviceId\\n\\nDevice Key:\\n$deviceKey\\n\\nلا تشارك المفتاح مع أي شخص.")
-            .setPositiveButton("حسناً", null).show()
+            .setView(box).setPositiveButton("حسناً", null).show()
+    }
+
+    private fun copyToClipboard(label: String, value: String) {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, value))
+        Toast.makeText(this, "$label تم نسخه", Toast.LENGTH_SHORT).show()
     }
 
     override fun onResume() {
@@ -504,8 +525,12 @@ class MainActivity : ComponentActivity() {
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
-    private fun randomToken(): String {
-        val bytes = ByteArray(32); SecureRandom().nextBytes(bytes)
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+    private fun randomDeviceId(): String {
+        val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        val random = SecureRandom()
+        val raw = (1..12).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")
+        return raw.chunked(4).joinToString(":")
     }
+
+    private fun randomDeviceKey(): String = "%06d".format(SecureRandom().nextInt(1_000_000))
 }
