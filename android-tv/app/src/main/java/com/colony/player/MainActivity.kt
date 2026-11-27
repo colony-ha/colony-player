@@ -305,7 +305,39 @@ class MainActivity : ComponentActivity() {
 
     private fun showSection(section: String) {
         selectedSection = section
-        showLibrary()
+        val visible = filteredStreams()
+        val title = when (section) {
+            "مباشر" -> "LIVE TV"
+            "أفلام" -> "MOVIES"
+            "مسلسلات" -> "SERIES"
+            "المفضلة" -> "FAVORITES"
+            else -> "ALL CONTENT"
+        }
+        buildShell(title, "${visible.size} عنصر في قائمتك")
+        if (visible.isEmpty()) {
+            addText(content, "لا توجد عناصر في هذا القسم حالياً.", 19, MUTED)
+            addAction(content, "تحديث القوائم", true) { loadPlaylists() }
+            return
+        }
+        val grouped = visible.groupBy { it.group.ifBlank { "عام" } }
+        var index = 0
+        grouped.forEach { (groupName, items) ->
+            addText(content, groupName, 18, GOLD, true)
+            val grid = android.widget.GridLayout(this).apply {
+                columnCount = 4
+                useDefaultMargins = false
+                alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
+            }
+            items.forEach { item ->
+                grid.addView(streamCard(item, index++), android.widget.GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = 150
+                    columnSpec = android.widget.GridLayout.spec((index - 1) % 4, 1f)
+                    setMargins(6, 6, 6, 6)
+                })
+            }
+            content.addView(grid, matchWrap(0, 4, 0, 14))
+        }
     }
 
     private fun streamCard(item: StreamItem, index: Int): View {
