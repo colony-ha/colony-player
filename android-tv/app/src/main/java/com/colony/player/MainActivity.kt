@@ -94,8 +94,8 @@ class MainActivity : ComponentActivity() {
                 if (!result.optBoolean("ok")) error(apiError(result))
                 showPlaylists(result.optJSONArray("playlists") ?: JSONArray())
             } catch (e: Exception) {
-                if (e.message?.contains("SUBSCRIPTION_EXPIRED") == true || e.message?.contains("DEVICE_BLOCKED") == true) showSubscription(null)
-                else showConnectionError(e.message ?: "تعذر تحميل القوائم")
+                showActivationScreen()
+                Toast.makeText(this@MainActivity, e.message ?: "تعذر تحميل القوائم. تحقق من الاتصال ثم أعد المحاولة.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -142,13 +142,15 @@ class MainActivity : ComponentActivity() {
                 }
                 streams = parseM3u(playlistText)
                 if (streams.isEmpty()) {
-                    showConnectionError("القائمة فارغة أو ليست بصيغة M3U مدعومة حالياً.")
+                    showActivationScreen()
+                    Toast.makeText(this@MainActivity, "القائمة لم ترجع عناصر M3U. تحقق من نوع القائمة والرابط.", Toast.LENGTH_LONG).show()
                 } else {
                     selectedSection = "الكل"
                     showLibrary()
                 }
             } catch (e: Exception) {
-                showConnectionError(e.message ?: "تعذر فتح قائمة التشغيل")
+                showActivationScreen()
+                Toast.makeText(this@MainActivity, e.message ?: "تعذر فتح قائمة التشغيل. تحقق من رابط القائمة.", Toast.LENGTH_LONG).show()
             }
         }
     }
