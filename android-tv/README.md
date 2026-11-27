@@ -20,3 +20,5 @@ Use the device details shown in the app to connect the device through the COLONY
 - Remote-control focusable controls
 
 Before Google Play publication, complete physical-device compatibility testing, accessibility and policy review, privacy disclosures, branded assets, and configure a private upload signing key. This build is not yet a Play Store release.
+
+The CI workflow publishes a separate debug APK artifact for installation testing before packaging the release outputs.
