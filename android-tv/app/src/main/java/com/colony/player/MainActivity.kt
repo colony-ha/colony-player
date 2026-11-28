@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -36,6 +37,7 @@ import com.colony.player.playlist.M3uPlaylistParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URL
 
 /**
  * COLONY PLAYER Android TV client.
@@ -270,7 +272,132 @@ class MainActivity : ComponentActivity() {
             MediaSection.SERIES -> "SERIES"
         }
         activeEntries = library.filter { it.section == section }
-        showGroupList(activeTitle, activeEntries)
+        if (section == MediaSection.LIVE) {
+            showGroupList(activeTitle, activeEntries)
+        } else {
+            showMediaCatalog(activeTitle, activeEntries)
+        }
+    }
+
+    /**
+     * Movies and series are a VOD catalogue, not channel groups.
+     * Display poster artwork and titles directly; selecting an item starts playback.
+     */
+    private fun showMediaCatalog(title: String, entries: List<MediaEntry>) {
+        screenLevel = "CATALOG"
+        activeGroup = null
+        newScreen()
+        root.setPadding(30, 16, 30, 16)
+
+        addText(root, title, 29, GOLD, true, Gravity.CENTER)
+        addText(root, "${entries.size} TITLES", 13, MUTED, false, Gravity.CENTER)
+
+        if (entries.isEmpty()) {
+            addText(root, "No titles found in this section.", 18, IVORY, false, Gravity.CENTER)
+            addAction(root, "BACK", true) { showHome() }
+            return
+        }
+
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            isFocusable = false
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 8, 0, 16)
+        }
+
+        val featured = entries.first()
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(18, 14, 18, 14)
+            background = outlineBackground(PANEL, BORDER, 1)
+            isFocusable = true
+            isClickable = true
+            setOnClickListener { play(featured) }
+            setOnFocusChangeListener { v, focused ->
+                v.background = outlineBackground(if (focused) FOCUSED_CARD else PANEL, GOLD, if (focused) 3 else 1)
+            }
+        }
+        val heroPoster = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = featured.title
+            background = outlineBackground(CARD, BORDER, 1)
+        }
+        hero.addView(heroPoster, LinearLayout.LayoutParams(150, 205).apply { rightMargin = 22 })
+        val heroInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        addText(heroInfo, featured.title, 23, IVORY, true, Gravity.START)
+        addText(heroInfo, if (title == "MOVIES") "MOVIE" else "SERIES", 13, GOLD, true, Gravity.START)
+        addText(heroInfo, "SELECT TO PLAY", 13, MUTED, false, Gravity.START)
+        hero.addView(heroInfo, LinearLayout.LayoutParams(0, -2, 1f))
+        content.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 18 })
+        loadArtwork(featured.logoUrl, heroPoster)
+
+        addText(content, if (title == "MOVIES") "ALL MOVIES" else "ALL SERIES", 19, GOLD, true, Gravity.START)
+
+        val rowScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            isFocusable = false
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(4, 8, 4, 12)
+        }
+        entries.forEach { entry ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(7, 7, 7, 9)
+                background = outlineBackground(CARD, BORDER, 1)
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { play(entry) }
+                setOnFocusChangeListener { v, focused ->
+                    v.background = outlineBackground(if (focused) FOCUSED_CARD else CARD, GOLD, if (focused) 3 else 1)
+                }
+            }
+            val poster = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = entry.title
+                background = outlineBackground(PANEL, BORDER, 1)
+            }
+            card.addView(poster, LinearLayout.LayoutParams(132, 184))
+            val name = TextView(this).apply {
+                text = entry.title
+                textSize = 12f
+                setTextColor(IVORY)
+                gravity = Gravity.CENTER
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(3, 7, 3, 2)
+            }
+            card.addView(name, LinearLayout.LayoutParams(132, 42))
+            row.addView(card, LinearLayout.LayoutParams(146, -2).apply { setMargins(5, 0, 5, 0) })
+            loadArtwork(entry.logoUrl, poster)
+        }
+        rowScroll.addView(row)
+        content.addView(rowScroll, LinearLayout.LayoutParams(-1, -2))
+        scroll.addView(content)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        addAction(root, "BACK", true) { showHome() }
+    }
+
+    private fun loadArtwork(imageUrl: String?, target: ImageView) {
+        if (imageUrl.isNullOrBlank()) return
+        lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                try {
+                    URL(imageUrl).openConnection().apply {
+                        connectTimeout = 8000
+                        readTimeout = 10000
+                    }.getInputStream().use { BitmapFactory.decodeStream(it) }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            if (bitmap != null && !isFinishing) target.setImageBitmap(bitmap)
+        }
     }
 
     private fun showFavorites() {
@@ -439,7 +566,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             "CHANNELS" -> showGroupList(activeTitle, activeEntries)
-            "GROUPS", "ITEMS" -> showHome()
+            "GROUPS", "ITEMS", "CATALOG" -> showHome()
             else -> super.onBackPressed()
         }
     }
