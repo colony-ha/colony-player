@@ -35,7 +35,20 @@ async function loadDevices(){
      catch(err){alert(readable(err.message));btn.disabled=false}
     });
     action.append(btn);
-   }else action.textContent="—";
+   }
+   const deleteBtn=document.createElement("button");
+   deleteBtn.className="small-action danger-action";
+   deleteBtn.textContent="مسح المستخدم";
+   deleteBtn.title="حذف المستخدم وبيانات جهازه نهائياً";
+   deleteBtn.addEventListener("click",async()=>{
+    if(!confirm("تأكيد الحذف النهائي؟ سيتم حذف حساب الجهاز وقوائم التشغيل وجلسات الدخول. لن يمكن التراجع عن هذه العملية، وسيبقى سجل كود الاشتراك دون ربط بهذا الجهاز."))return;
+    deleteBtn.disabled=true;
+    try{
+     await call("/devices/"+encodeURIComponent(device.id),{method:"DELETE"});
+     await Promise.all([loadDevices(),loadCodes()]);
+    }catch(err){alert(readable(err.message));deleteBtn.disabled=false}
+   });
+   action.append(deleteBtn);
    tr.append(id,code,created,entitlement,expires,state,action);body.append(tr);
   }
   if(!(d.devices||[]).length)body.innerHTML="<tr><td colspan='7'>لا توجد أجهزة مسجلة.</td></tr>";
