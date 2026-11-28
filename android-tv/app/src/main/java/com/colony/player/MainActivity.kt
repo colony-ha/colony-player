@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -86,19 +87,21 @@ class MainActivity : ComponentActivity() {
                     return@launch
                 }
 
-                val entries = withContext(Dispatchers.IO) {
-                    val source = api.firstM3uPlaylist()
-                    val document = api.downloadM3u(source.url)
-                    M3uPlaylistParser.parse(document)
-                }
+                showLoading("Getting your playlist...")
+                val source = withContext(Dispatchers.IO) { api.firstM3uPlaylist() }
+
+                showLoading("Downloading and preparing channels...")
+                val entries = withContext(Dispatchers.IO) { api.loadM3u(source.url) }
                 library = entries
                 showHome()
             } catch (error: Exception) {
+                android.util.Log.e("ColonyPlayer", "Device synchronization failed", error)
                 val message = when (error) {
                     is ApiException -> explainApiError(error.code)
                     is IllegalArgumentException -> when (error.message) {
                         "NOT_M3U" -> "This source is not an M3U playlist. Only M3U and M3U Plus are supported."
                         "M3U_EMPTY" -> "The M3U playlist contains no playable entries."
+                        "PLAYLIST_TOO_LARGE" -> "This playlist has more than 100,000 entries. Please split it into smaller playlists."
                         else -> "The playlist format is invalid."
                     }
                     else -> error.message ?: "Unable to load the playlist."
@@ -639,9 +642,10 @@ class MainActivity : ComponentActivity() {
         val logo = ImageView(this).apply {
             setImageResource(R.drawable.colony_player_logo)
             scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
             contentDescription = "COLONY PLAYER"
         }
-        parent.addView(logo, LinearLayout.LayoutParams(250, 78).apply {
+        parent.addView(logo, LinearLayout.LayoutParams(280, 78).apply {
             gravity = Gravity.CENTER
             bottomMargin = 8
         })
