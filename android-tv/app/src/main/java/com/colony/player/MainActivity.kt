@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
     private var activeSection: MediaSection? = null
     private var activeGroup: String? = null
     private var screenLevel = "ACTIVATION"
+    private var catalogPage = 0
 
     private val preferences by lazy {
         getSharedPreferences("colony_player_library_v2", Context.MODE_PRIVATE)
@@ -272,6 +273,7 @@ class MainActivity : ComponentActivity() {
             MediaSection.SERIES -> "SERIES"
         }
         activeEntries = library.filter { it.section == section }
+        catalogPage = 0
         if (section == MediaSection.LIVE) {
             showGroupList(activeTitle, activeEntries)
         } else {
@@ -283,12 +285,20 @@ class MainActivity : ComponentActivity() {
      * Movies and series are a VOD catalogue, not channel groups.
      * Display poster artwork and titles directly; selecting an item starts playback.
      */
+    /**
+     * VOD catalogue: no country/group/channel layer. Show a paged poster grid
+     * so very large playlists do not create thousands of Android views at once.
+     */
     private fun showMediaCatalog(title: String, entries: List<MediaEntry>) {
         screenLevel = "CATALOG"
         activeGroup = null
-        newScreen()
-        root.setPadding(30, 16, 30, 16)
+        val pageSize = 20
+        val pageCount = ((entries.size + pageSize - 1) / pageSize).coerceAtLeast(1)
+        catalogPage = catalogPage.coerceIn(0, pageCount - 1)
+        val pageEntries = entries.drop(catalogPage * pageSize).take(pageSize)
 
+        newScreen()
+        root.setPadding(28, 12, 28, 10)
         addText(root, title, 29, GOLD, true, Gravity.CENTER)
         addText(root, "${entries.size} TITLES", 13, MUTED, false, Gravity.CENTER)
 
@@ -298,20 +308,16 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val scroll = ScrollView(this).apply {
-            isFillViewport = false
-            isFocusable = false
-        }
+        val scroll = ScrollView(this).apply { isFillViewport = false; isFocusable = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 16)
+            setPadding(0, 5, 0, 5)
         }
-
         val featured = entries.first()
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(18, 14, 18, 14)
+            setPadding(14, 9, 14, 9)
             background = outlineBackground(PANEL, BORDER, 1)
             isFocusable = true
             isClickable = true
@@ -325,61 +331,79 @@ class MainActivity : ComponentActivity() {
             contentDescription = featured.title
             background = outlineBackground(CARD, BORDER, 1)
         }
-        hero.addView(heroPoster, LinearLayout.LayoutParams(150, 205).apply { rightMargin = 22 })
+        hero.addView(heroPoster, LinearLayout.LayoutParams(104, 142).apply { rightMargin = 18 })
         val heroInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        addText(heroInfo, featured.title, 23, IVORY, true, Gravity.START)
-        addText(heroInfo, if (title == "MOVIES") "MOVIE" else "SERIES", 13, GOLD, true, Gravity.START)
-        addText(heroInfo, "SELECT TO PLAY", 13, MUTED, false, Gravity.START)
+        addText(heroInfo, featured.title, 21, IVORY, true, Gravity.START)
+        addText(heroInfo, if (title == "MOVIES") "MOVIE" else "SERIES", 12, GOLD, true, Gravity.START)
+        addText(heroInfo, "SELECT TO PLAY", 12, MUTED, false, Gravity.START)
         hero.addView(heroInfo, LinearLayout.LayoutParams(0, -2, 1f))
-        content.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 18 })
+        content.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 })
         loadArtwork(featured.logoUrl, heroPoster)
 
-        addText(content, if (title == "MOVIES") "ALL MOVIES" else "ALL SERIES", 19, GOLD, true, Gravity.START)
-
-        val rowScroll = android.widget.HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            isFocusable = false
-        }
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(4, 8, 4, 12)
-        }
-        entries.forEach { entry ->
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
+        addText(content, if (title == "MOVIES") "ALL MOVIES" else "ALL SERIES", 17, GOLD, true, Gravity.START)
+        pageEntries.chunked(5).forEach { rowEntries ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
-                setPadding(7, 7, 7, 9)
-                background = outlineBackground(CARD, BORDER, 1)
-                isFocusable = true
-                isClickable = true
-                setOnClickListener { play(entry) }
-                setOnFocusChangeListener { v, focused ->
-                    v.background = outlineBackground(if (focused) FOCUSED_CARD else CARD, GOLD, if (focused) 3 else 1)
+            }
+            rowEntries.forEach { entry ->
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(5, 5, 5, 5)
+                    background = outlineBackground(CARD, BORDER, 1)
+                    isFocusable = true
+                    isClickable = true
+                    setOnClickListener { play(entry) }
+                    setOnFocusChangeListener { v, focused ->
+                        v.background = outlineBackground(if (focused) FOCUSED_CARD else CARD, GOLD, if (focused) 3 else 1)
+                    }
                 }
+                val poster = ImageView(this).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    contentDescription = entry.title
+                    background = outlineBackground(PANEL, BORDER, 1)
+                }
+                card.addView(poster, LinearLayout.LayoutParams(112, 148))
+                val name = TextView(this).apply {
+                    text = entry.title
+                    textSize = 11f
+                    setTextColor(IVORY)
+                    gravity = Gravity.CENTER
+                    maxLines = 2
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(2, 5, 2, 2)
+                }
+                card.addView(name, LinearLayout.LayoutParams(112, 38))
+                row.addView(card, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    setMargins(5, 4, 5, 4)
+                })
+                loadArtwork(entry.logoUrl, poster)
             }
-            val poster = ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                contentDescription = entry.title
-                background = outlineBackground(PANEL, BORDER, 1)
+            repeat(5 - rowEntries.size) {
+                row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).apply {
+                    setMargins(5, 0, 5, 0)
+                })
             }
-            card.addView(poster, LinearLayout.LayoutParams(132, 184))
-            val name = TextView(this).apply {
-                text = entry.title
-                textSize = 12f
-                setTextColor(IVORY)
-                gravity = Gravity.CENTER
-                maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(3, 7, 3, 2)
-            }
-            card.addView(name, LinearLayout.LayoutParams(132, 42))
-            row.addView(card, LinearLayout.LayoutParams(146, -2).apply { setMargins(5, 0, 5, 0) })
-            loadArtwork(entry.logoUrl, poster)
+            content.addView(row, LinearLayout.LayoutParams(-1, -2))
         }
-        rowScroll.addView(row)
-        content.addView(rowScroll, LinearLayout.LayoutParams(-1, -2))
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val paging = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        if (catalogPage > 0) addFooterAction(paging, "PREVIOUS") {
+            catalogPage--
+            showMediaCatalog(title, entries)
+        }
+        addFooterAction(paging, "PAGE ${catalogPage + 1}/$pageCount") { }
+        if (catalogPage < pageCount - 1) addFooterAction(paging, "NEXT") {
+            catalogPage++
+            showMediaCatalog(title, entries)
+        }
+        root.addView(paging, LinearLayout.LayoutParams(-1, -2))
         addAction(root, "BACK", true) { showHome() }
     }
 
