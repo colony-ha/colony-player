@@ -137,14 +137,33 @@ class MainActivity : ComponentActivity() {
 
     private fun showActivation(message: String = "To continue using the app") {
         newScreen()
-        root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-        addBrand(root)
-        addText(root, "To continue using the app", 25, IVORY, true, Gravity.CENTER)
-        addText(root, "Adding Playlist", 19, GOLD, true, Gravity.CENTER)
-        val website = addText(root, "Visit colony-player.pages.dev", 16, MUTED, false, Gravity.CENTER)
+        val metrics = resources.displayMetrics
+        val shortSide = minOf(metrics.widthPixels, metrics.heightPixels) / metrics.density
+        val compact = shortSide < 420
+        root.setPadding(if (compact) 18 else 42, if (compact) 8 else 22, if (compact) 18 else 42, if (compact) 10 else 22)
+
+        // Keep RELOAD fixed and visible; allow the information above it to scroll
+        // on phones with shorter displays instead of pushing the action off-screen.
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            setPadding(0, 0, 0, 4)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            clipToPadding = false
+            addView(content, ScrollView.LayoutParams(-1, -2))
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        addBrand(content)
+        addText(content, "To continue using the app", if (compact) 21 else 25, IVORY, true, Gravity.CENTER)
+        addText(content, "Adding Playlist", if (compact) 17 else 19, GOLD, true, Gravity.CENTER)
+        val website = addText(content, "Visit colony-player.pages.dev", if (compact) 14 else 16, MUTED, false, Gravity.CENTER)
         website.isFocusable = true
         website.setOnClickListener { openWebsite() }
-        addText(root, "Log in using your Device Address and Key", 18, IVORY, true, Gravity.CENTER)
+        addText(content, "Log in using your Device Address and Key", if (compact) 15 else 18, IVORY, true, Gravity.CENTER)
 
         val credentials = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -152,17 +171,16 @@ class MainActivity : ComponentActivity() {
         }
         addCredential(credentials, "MAC Address", identity.address)
         addCredential(credentials, "Device Key", identity.key)
-        root.addView(credentials, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = 18
-            bottomMargin = 14
+        content.addView(credentials, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = if (compact) 6 else 18
+            bottomMargin = if (compact) 5 else 14
         })
 
-        addText(root, "Activate your device and enjoy!", 18, GOLD, true, Gravity.CENTER)
+        addText(content, "Activate your device and enjoy!", if (compact) 16 else 18, GOLD, true, Gravity.CENTER)
         if (message != "To continue using the app") {
-            addText(root, message, 14, MUTED, false, Gravity.CENTER)
+            addText(content, message, if (compact) 12 else 14, MUTED, false, Gravity.CENTER)
         }
         addAction(root, "RELOAD", true) { synchronizeDevice() }
-        root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
     }
 
     private fun addCredential(parent: LinearLayout, label: String, value: String) {
