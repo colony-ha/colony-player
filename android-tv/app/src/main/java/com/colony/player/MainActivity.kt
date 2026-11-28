@@ -422,8 +422,8 @@ class MainActivity : ComponentActivity() {
                     val maxWidth = 320
                     val maxHeight = 420
                     var sample = 1
-                    while (bounds.outWidth / (sample * 2) >= maxWidth &&
-                        bounds.outHeight / (sample * 2) >= maxHeight || bounds.outWidth / (sample * 2) >= maxWidth) {
+                    while (bounds.outWidth / (sample * 2) >= maxWidth ||
+                        bounds.outHeight / (sample * 2) >= maxHeight) {
                         sample *= 2
                     }
                     val options = BitmapFactory.Options().apply { inSampleSize = sample }
