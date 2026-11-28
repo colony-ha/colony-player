@@ -36,7 +36,13 @@ android {
         debug { applicationIdSuffix = ".debug" }
         release {
             isMinifyEnabled = true
-            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
+            // Always produce an installable APK for direct testing. Use the private
+            // upload key when configured; otherwise use the stable CI debug key.
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
