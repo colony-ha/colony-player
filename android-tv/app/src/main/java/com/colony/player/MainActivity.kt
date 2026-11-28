@@ -99,7 +99,6 @@ class MainActivity : ComponentActivity() {
                     is IllegalArgumentException -> when (error.message) {
                         "NOT_M3U" -> "This source is not an M3U playlist. Only M3U and M3U Plus are supported."
                         "M3U_EMPTY" -> "The M3U playlist contains no playable entries."
-                        "PLAYLIST_TOO_LARGE" -> "This playlist has more than 100,000 entries. Please split it into smaller playlists."
                         else -> "The playlist format is invalid."
                     }
                     else -> error.message ?: "Unable to load the playlist."
