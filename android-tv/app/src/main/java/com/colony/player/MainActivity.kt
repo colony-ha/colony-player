@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
         val scroll = ScrollView(this).apply {
             isFillViewport = false
             clipToPadding = false
-            addView(content, ScrollView.LayoutParams(-1, -2))
+            addView(content)
         }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
