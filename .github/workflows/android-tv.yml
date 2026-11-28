@@ -32,6 +32,13 @@ jobs:
           packages: "platform-tools"
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      # Keep the Android debug signing certificate stable across GitHub runners.
+      # ANDROID_ID is scoped to the app signing certificate; without this cache it changes on every build.
+      - name: Restore stable Android debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: colony-player-android-debug-keystore-v1
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
