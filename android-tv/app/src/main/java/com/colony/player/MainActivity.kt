@@ -14,7 +14,9 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.ArrayAdapter
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
@@ -24,6 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.colony.player.device.DeviceIdentity
 import com.colony.player.model.MediaEntry
 import com.colony.player.model.MediaSection
@@ -47,6 +50,11 @@ class MainActivity : ComponentActivity() {
     private var library: List<MediaEntry> = emptyList()
     private var currentPlayer: ExoPlayer? = null
     private var isLoading = false
+    private var activeTitle = "LIVE TV"
+    private var activeEntries: List<MediaEntry> = emptyList()
+    private var activeSection: MediaSection? = null
+    private var activeGroup: String? = null
+    private var screenLevel = "ACTIVATION"
 
     private val preferences by lazy {
         getSharedPreferences("colony_player_library_v2", Context.MODE_PRIVATE)
@@ -232,6 +240,20 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        val artwork = ImageView(this).apply {
+            setImageResource(
+                when (section) {
+                    MediaSection.LIVE -> R.drawable.card_live
+                    MediaSection.MOVIE -> R.drawable.card_movies
+                    MediaSection.SERIES -> R.drawable.card_series
+                }
+            )
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = title
+        }
+        card.addView(artwork, LinearLayout.LayoutParams(-1, 0, 1f).apply {
+            bottomMargin = 12
+        })
         addText(card, title, 25, GOLD, true, Gravity.CENTER)
         addText(card, label, 13, IVORY, false, Gravity.CENTER)
         parent.addView(card, LinearLayout.LayoutParams(0, -1, 1f).apply {
@@ -240,77 +262,180 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showLibrary(section: MediaSection) {
-        val filtered = library.filter { it.section == section }
-        val title = when (section) {
+        activeSection = section
+        activeGroup = null
+        activeTitle = when (section) {
             MediaSection.LIVE -> "LIVE TV"
             MediaSection.MOVIE -> "MOVIES"
             MediaSection.SERIES -> "SERIES"
         }
-        showMediaList(title, filtered)
+        activeEntries = library.filter { it.section == section }
+        showGroupList(activeTitle, activeEntries)
     }
 
     private fun showFavorites() {
+        activeSection = null
+        activeGroup = null
+        activeTitle = "FAVORITES"
         val favorites = preferences.getStringSet("favorites", emptySet()) ?: emptySet()
-        showMediaList("FAVORITES", library.filter { favorites.contains(it.id) })
+        activeEntries = library.filter { favorites.contains(it.id) }
+        showMediaList(activeTitle, activeEntries)
     }
 
     private fun showHistory() {
+        activeSection = null
+        activeGroup = null
+        activeTitle = "HISTORY"
         val history = preferences.getString("history", "").orEmpty()
             .split("|").filter { it.isNotBlank() }
-        showMediaList("HISTORY", history.mapNotNull { id -> library.firstOrNull { it.id == id } })
+        activeEntries = history.mapNotNull { id -> library.firstOrNull { it.id == id } }
+        showMediaList(activeTitle, activeEntries)
+    }
+
+    private fun showGroupList(title: String, entries: List<MediaEntry>) {
+        screenLevel = "GROUPS"
+        newScreen()
+        addText(root, title, 27, GOLD, true, Gravity.CENTER)
+        val groups = entries.groupBy { it.groupName.ifBlank { "OTHER" } }
+            .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+        addText(root, "${groups.size} GROUPS · ${entries.size} CHANNELS", 13, MUTED, false, Gravity.CENTER)
+        val list = ListView(this).apply {
+            divider = outlineBackground(BORDER, BORDER, 1)
+            dividerHeight = 1
+            isFocusable = true
+            adapter = object : ArrayAdapter<String>(
+                this@MainActivity, android.R.layout.simple_list_item_1, groups.keys.toList()
+            ) {
+                override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                    val row = (convertView as? TextView) ?: TextView(this@MainActivity)
+                    row.text = getItem(position)
+                    row.textSize = 21f
+                    row.typeface = Typeface.DEFAULT_BOLD
+                    row.setTextColor(GOLD)
+                    row.gravity = Gravity.CENTER_VERTICAL
+                    row.setPadding(24, 18, 24, 18)
+                    row.background = outlineBackground(PANEL, BORDER, 1)
+                    row.isFocusable = true
+                    return row
+                }
+            }
+            setOnItemClickListener { _, _, position, _ ->
+                val group = groups.keys.toList()[position]
+                activeGroup = group
+                showGroupChannels(title, group, groups[group].orEmpty())
+            }
+        }
+        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        addAction(root, "BACK", true) { showHome() }
+        list.requestFocus()
+    }
+
+    private fun showGroupChannels(title: String, group: String, entries: List<MediaEntry>) {
+        screenLevel = "CHANNELS"
+        activeGroup = group
+        newScreen()
+        addText(root, group, 27, GOLD, true, Gravity.CENTER)
+        addText(root, "${entries.size} CHANNELS", 13, MUTED, false, Gravity.CENTER)
+        val list = ListView(this).apply {
+            divider = outlineBackground(BORDER, BORDER, 1)
+            dividerHeight = 1
+            adapter = object : ArrayAdapter<String>(
+                this@MainActivity, android.R.layout.simple_list_item_1, entries.map { it.title }
+            ) {
+                override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                    val row = (convertView as? TextView) ?: TextView(this@MainActivity)
+                    row.text = getItem(position)
+                    row.textSize = 19f
+                    row.setTextColor(IVORY)
+                    row.gravity = Gravity.CENTER_VERTICAL
+                    row.setPadding(24, 15, 24, 15)
+                    row.background = outlineBackground(PANEL, BORDER, 1)
+                    row.isFocusable = true
+                    return row
+                }
+            }
+            setOnItemClickListener { _, _, position, _ -> play(entries[position]) }
+        }
+        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        addAction(root, "BACK", true) { showGroupList(title, activeEntries) }
+        list.requestFocus()
     }
 
     private fun showMediaList(title: String, entries: List<MediaEntry>) {
+        screenLevel = "ITEMS"
         newScreen()
         addText(root, title, 27, GOLD, true, Gravity.CENTER)
         addText(root, "${entries.size} ITEMS", 13, MUTED, false, Gravity.CENTER)
-
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        entries.groupBy { it.groupName }.forEach { (group, groupedEntries) ->
-            addText(list, group, 17, GOLD, true)
-            groupedEntries.forEach { entry ->
-                val row = addAction(list, entry.title, false) { play(entry) }
-                row.gravity = Gravity.CENTER_VERTICAL
-                row.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        val list = ListView(this).apply {
+            divider = outlineBackground(BORDER, BORDER, 1)
+            dividerHeight = 1
+            adapter = object : ArrayAdapter<String>(
+                this@MainActivity, android.R.layout.simple_list_item_1, entries.map { it.title }
+            ) {
+                override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                    val row = (convertView as? TextView) ?: TextView(this@MainActivity)
+                    row.text = getItem(position)
+                    row.textSize = 19f
+                    row.setTextColor(IVORY)
+                    row.gravity = Gravity.CENTER_VERTICAL
+                    row.setPadding(24, 15, 24, 15)
+                    row.background = outlineBackground(PANEL, BORDER, 1)
+                    row.isFocusable = true
+                    return row
+                }
             }
+            setOnItemClickListener { _, _, position, _ -> play(entries[position]) }
         }
-        scroll.addView(list)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         addAction(root, "BACK", true) { showHome() }
+        list.requestFocus()
     }
 
     private fun play(entry: MediaEntry) {
         rememberHistory(entry)
+        screenLevel = "PLAYER"
         newScreen()
-        addText(root, entry.title, 21, GOLD, true, Gravity.CENTER)
+        root.setPadding(0, 0, 0, 0)
         val playerView = PlayerView(this).apply {
             useController = true
             controllerAutoShow = true
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+            setOnLongClickListener {
+                toggleFavorite(entry)
+                Toast.makeText(
+                    this@MainActivity,
+                    if (isFavorite(entry)) "Added to favorites" else "Removed from favorites",
+                    Toast.LENGTH_SHORT
+                ).show()
+                true
+            }
         }
-        root.addView(playerView, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        val controls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        val isSaved = isFavorite(entry)
-        addFooterAction(controls, if (isSaved) "REMOVE FAVORITE" else "FAVORITE") {
-            toggleFavorite(entry)
-            play(entry)
-        }
-        addFooterAction(controls, "BACK") {
-            releasePlayer()
-            showHome()
-        }
-        root.addView(controls, LinearLayout.LayoutParams(-1, -2))
-
+        root.addView(playerView, LinearLayout.LayoutParams(-1, -1))
         releasePlayer()
         currentPlayer = ExoPlayer.Builder(this).build().also { engine ->
             playerView.player = engine
             engine.setMediaItem(MediaItem.fromUri(entry.streamUrl))
             engine.prepare()
             engine.playWhenReady = true
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        when (screenLevel) {
+            "PLAYER" -> {
+                releasePlayer()
+                val group = activeGroup
+                if (group != null) {
+                    showGroupChannels(activeTitle, group, activeEntries.filter { it.groupName == group })
+                } else {
+                    showMediaList(activeTitle, activeEntries)
+                }
+            }
+            "CHANNELS" -> showGroupList(activeTitle, activeEntries)
+            "GROUPS", "ITEMS" -> showHome()
+            else -> super.onBackPressed()
         }
     }
 
