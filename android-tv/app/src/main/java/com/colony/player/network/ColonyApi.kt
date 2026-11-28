@@ -7,6 +7,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
+import com.colony.player.model.MediaEntry
+import com.colony.player.playlist.M3uPlaylistParser
 import java.util.concurrent.TimeUnit
 
 class ColonyApi {
@@ -65,18 +67,22 @@ class ColonyApi {
         return PlaylistSource(id, data.optString("name", "COLONY PLAYLIST"), type, url)
     }
 
-    fun downloadM3u(url: String): String {
+    /** Downloads and parses the playlist as a stream; never stores the whole M3U text in memory. */
+    fun loadM3u(url: String): List<MediaEntry> {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "COLONY-PLAYER-AndroidTV/2.0")
+            .header("User-Agent", "COLONY-PLAYER-Android/2.2")
             .header("Accept", "audio/x-mpegurl, application/vnd.apple.mpegurl, text/plain, */*")
             .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw ApiException("PLAYLIST_HTTP_${response.code}")
-            val body = response.body ?: throw ApiException("EMPTY_PLAYLIST")
-            val content = body.string()
-            if (content.isBlank()) throw ApiException("EMPTY_PLAYLIST")
-            return content
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw ApiException("PLAYLIST_HTTP_${response.code}")
+                val body = response.body ?: throw ApiException("EMPTY_PLAYLIST")
+                if (body.contentLength() == 0L) throw ApiException("EMPTY_PLAYLIST")
+                return body.byteStream().use { M3uPlaylistParser.parse(it) }
+            }
+        } catch (error: IOException) {
+            throw ApiException("NETWORK_ERROR", error)
         }
     }
 
