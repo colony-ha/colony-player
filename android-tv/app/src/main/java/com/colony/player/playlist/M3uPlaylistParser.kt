@@ -34,9 +34,10 @@ object M3uPlaylistParser {
                     val metadata = pending ?: Metadata(
                         "Item ${entries.size + 1}", "Uncategorized", null, ""
                     )
-                    val group = pendingGroup?.takeIf { it.isNotBlank() }
-                        ?: metadata.group.ifBlank { "Uncategorized" }
+                    val rawGroup = pendingGroup?.takeIf { it.isNotBlank() }
+                        ?: metadata.group.ifBlank { "OTHER" }
                     val title = metadata.title.ifBlank { "Item ${entries.size + 1}" }
+                    val group = normalizeGroupName(rawGroup, title)
                     entries += MediaEntry(
                         id = stableId(line, title, group),
                         title = title,
@@ -86,6 +87,22 @@ object M3uPlaylistParser {
         val match = expression.find(source) ?: return ""
         return (match.groups[1]?.value ?: match.groups[2]?.value ?: match.groups[3]?.value)
             .orEmpty().trim()
+    }
+
+    private fun normalizeGroupName(rawGroup: String, title: String): String {
+        val value = "$rawGroup $title".lowercase(Locale.ROOT)
+        return when {
+            listOf("bein sports", "beinsports", "bein sport", "بي ان سبورت").any(value::contains) ->
+                "BEIN SPORTS"
+            listOf("mbc", "ام بي سي").any(value::contains) -> "MBC"
+            listOf("france", "français", "francais", "tf1", "france 2", "france 3",
+                "canal+", "canal plus", "m6", "c8", "tfx").any(value::contains) -> "FRANCE"
+            listOf("algeria", "algérie", "algerie", "dz", "entv", "canal algérie",
+                "canal algerie", "echorouk", "ennahar", "الشروق", "النهار", "الجزائر")
+                .any(value::contains) -> "ALGERIA"
+            rawGroup.isBlank() -> "OTHER"
+            else -> rawGroup.trim().uppercase(Locale.ROOT)
+        }
     }
 
     private fun detectSection(typeValue: String, group: String, url: String): MediaSection {
