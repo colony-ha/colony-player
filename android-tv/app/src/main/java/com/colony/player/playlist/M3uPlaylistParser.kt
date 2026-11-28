@@ -12,8 +12,6 @@ import java.util.Locale
 
 /** Streaming parser for standard extended M3U and common M3U Plus metadata. */
 object M3uPlaylistParser {
-    private const val MAX_ENTRIES = 100_000
-
     /** Compatibility entry point; production downloads use [parse] with an InputStream. */
     fun parse(document: String): List<MediaEntry> =
         ByteArrayInputStream(document.toByteArray(Charsets.UTF_8)).use { parse(it) }
@@ -61,7 +59,6 @@ object M3uPlaylistParser {
                             logoUrl = metadata.logo,
                             section = detectSection(metadata.type, group, line)
                         )
-                        require(entries.size <= MAX_ENTRIES) { "PLAYLIST_TOO_LARGE" }
                         pending = null
                         pendingGroup = null
                     }
