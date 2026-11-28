@@ -13,10 +13,10 @@ import java.util.concurrent.TimeUnit
 
 class ColonyApi {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(18, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(12, TimeUnit.SECONDS)
-        .callTimeout(25, TimeUnit.SECONDS)
+        .callTimeout(5, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)
         .build()
 
