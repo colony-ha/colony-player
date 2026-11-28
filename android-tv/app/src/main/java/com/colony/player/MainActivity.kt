@@ -423,7 +423,7 @@ class MainActivity : ComponentActivity() {
                     val maxHeight = 420
                     var sample = 1
                     while (bounds.outWidth / (sample * 2) >= maxWidth &&
-                        bounds.outHeight / (sample * 2) >= maxHeight) {
+                        bounds.outHeight / (sample * 2) >= maxHeight || bounds.outWidth / (sample * 2) >= maxWidth) {
                         sample *= 2
                     }
                     val options = BitmapFactory.Options().apply { inSampleSize = sample }
@@ -435,7 +435,7 @@ class MainActivity : ComponentActivity() {
                     null
                 }
             }
-            if (bitmap != null && !isFinishing && !target.isAttachedToWindow.not()) {
+            if (bitmap != null && !isFinishing && target.isAttachedToWindow) {
                 target.setImageBitmap(bitmap)
             }
         }
