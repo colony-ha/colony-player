@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.BitmapFactory
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -34,7 +33,6 @@ import com.colony.player.model.MediaEntry
 import com.colony.player.model.MediaSection
 import com.colony.player.network.ApiException
 import com.colony.player.network.ColonyApi
-import com.colony.player.playlist.M3uPlaylistParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -415,15 +413,31 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 try {
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     URL(imageUrl).openConnection().apply {
                         connectTimeout = 8000
                         readTimeout = 10000
-                    }.getInputStream().use { BitmapFactory.decodeStream(it) }
+                    }.getInputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
+
+                    val maxWidth = 320
+                    val maxHeight = 420
+                    var sample = 1
+                    while (bounds.outWidth / (sample * 2) >= maxWidth &&
+                        bounds.outHeight / (sample * 2) >= maxHeight) {
+                        sample *= 2
+                    }
+                    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                    URL(imageUrl).openConnection().apply {
+                        connectTimeout = 8000
+                        readTimeout = 10000
+                    }.getInputStream().use { BitmapFactory.decodeStream(it, null, options) }
                 } catch (_: Exception) {
                     null
                 }
             }
-            if (bitmap != null && !isFinishing) target.setImageBitmap(bitmap)
+            if (bitmap != null && !isFinishing && !target.isAttachedToWindow.not()) {
+                target.setImageBitmap(bitmap)
+            }
         }
     }
 
