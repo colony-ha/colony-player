@@ -16,9 +16,9 @@ android {
     defaultConfig {
         applicationId = "com.colony.player"
         minSdk = 30
-        targetSdk = 35
-        versionCode = 6
-        versionName = "2.2.1"
+        targetSdk = 32
+        versionCode = 7
+        versionName = "2.2.2"
     }
 
     signingConfigs {
