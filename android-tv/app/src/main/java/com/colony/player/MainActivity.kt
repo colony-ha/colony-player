@@ -303,6 +303,8 @@ class MainActivity : ComponentActivity() {
             divider = outlineBackground(BORDER, BORDER, 1)
             dividerHeight = 1
             isFocusable = true
+            isFocusableInTouchMode = true
+            setItemsCanFocus(false)
             adapter = object : ArrayAdapter<String>(
                 this@MainActivity, android.R.layout.simple_list_item_1, groups.keys.toList()
             ) {
@@ -315,7 +317,8 @@ class MainActivity : ComponentActivity() {
                     row.gravity = Gravity.CENTER_VERTICAL
                     row.setPadding(24, 18, 24, 18)
                     row.background = outlineBackground(PANEL, BORDER, 1)
-                    row.isFocusable = true
+                    row.isFocusable = false
+                    row.isClickable = false
                     return row
                 }
             }
@@ -350,7 +353,8 @@ class MainActivity : ComponentActivity() {
                     row.gravity = Gravity.CENTER_VERTICAL
                     row.setPadding(24, 15, 24, 15)
                     row.background = outlineBackground(PANEL, BORDER, 1)
-                    row.isFocusable = true
+                    row.isFocusable = false
+                    row.isClickable = false
                     return row
                 }
             }
@@ -380,7 +384,8 @@ class MainActivity : ComponentActivity() {
                     row.gravity = Gravity.CENTER_VERTICAL
                     row.setPadding(24, 15, 24, 15)
                     row.background = outlineBackground(PANEL, BORDER, 1)
-                    row.isFocusable = true
+                    row.isFocusable = false
+                    row.isClickable = false
                     return row
                 }
             }
