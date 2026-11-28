@@ -99,7 +99,7 @@ object M3uPlaylistParser {
 
     private fun attribute(source: String, key: String): String {
         val expression = Regex(
-            """(?:^|\\s)${Regex.escape(key)}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s]+))""",
+            """(?:^|\s)${Regex.escape(key)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))""",
             RegexOption.IGNORE_CASE
         )
         val match = expression.find(source) ?: return ""
